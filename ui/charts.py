@@ -7,11 +7,12 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
-def create_candlestick_chart(hist: pd.DataFrame, symbol: str) -> go.Figure:
+def create_candlestick_chart(hist: pd.DataFrame, symbol: str, current_price: float = None) -> go.Figure:
     """
     Cria um gráfico Candlestick profissional com médias móveis de 9 e 21 períodos
     e painel inferior sincronizado de Volume via Plotly.
     Oculta finais de semana para eliminar lacunas vazias no gráfico de ações da B3.
+    Destaca a cotação de hoje / preço atual com linha d'água de referência.
     """
     fig = make_subplots(
         rows=2, cols=1,
@@ -67,7 +68,29 @@ def create_candlestick_chart(hist: pd.DataFrame, symbol: str) -> go.Figure:
         row=1, col=1
     )
 
-    # 4. Volume colorido de acordo com o fechamento do dia (alta/baixa)
+    # 4. Linha horizontal destacando a cotação de hoje / preço atual
+    target_price = current_price if (current_price and current_price > 0) else hist['Close'].iloc[-1]
+    last_date = hist.index[-1]
+    
+    # Formata data legível do último candle
+    try:
+        last_date_str = last_date.strftime("%d/%m")
+    except Exception:
+        last_date_str = "Hoje"
+
+    fig.add_hline(
+        y=target_price,
+        line_dash="dash",
+        line_color="#60a5fa",
+        line_width=1.5,
+        annotation_text=f" Hoje ({last_date_str}): R$ {target_price:.2f} ",
+        annotation_position="top left",
+        annotation_font=dict(size=12, color="#ffffff"),
+        annotation_bgcolor="rgba(37, 99, 235, 0.75)",
+        row=1, col=1
+    )
+
+    # 5. Volume colorido de acordo com o fechamento do dia (alta/baixa)
     volume_colors = [
         "#10b981" if close >= open_ else "#ef4444"
         for close, open_ in zip(hist['Close'], hist['Open'])
@@ -107,7 +130,9 @@ def create_candlestick_chart(hist: pd.DataFrame, symbol: str) -> go.Figure:
             showgrid=True,
             gridcolor="#1f2937",
             tickprefix="R$ ",
-            side="right"
+            side="right",
+            autorange=True,
+            fixedrange=False
         ),
         yaxis2=dict(
             title="Volume",

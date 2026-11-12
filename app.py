@@ -13,7 +13,8 @@ from services.market_data import (
     normalize_ticker,
     get_search_name,
     fetch_stock_data,
-    calculate_market_metrics
+    calculate_market_metrics,
+    scan_b3_market_opportunities
 )
 from services.news_service import fetch_google_news, format_news_for_prompt
 from services.ai_service import gerar_analise_cached, get_available_models
@@ -24,6 +25,7 @@ from ui.components import (
     render_ai_card,
     render_reasons_and_variables,
     render_news_expander,
+    render_scanner_results,
     render_footer
 )
 
@@ -66,12 +68,13 @@ with st.sidebar:
             placeholder="Ex: SAPR11.SA, TAEE11.SA, KLBN11.SA...",
             help="Informe o código do ticker com ou sem .SA."
         )
+        ticker_normalized = normalize_ticker(user_ticker)
+        asset_display_name = ticker_normalized
     else:
         # Extrai o código do ticker antes do hífen (ex: 'PETR4.SA - Petrobras (PN)' -> 'PETR4.SA')
         user_ticker = selected_enum_val.split(" - ")[0].strip()
-
-    ticker_normalized = normalize_ticker(user_ticker)
-    asset_display_name = selected_enum_val  # Mantém "PETR4.SA - Petrobras (PN)"
+        ticker_normalized = normalize_ticker(user_ticker)
+        asset_display_name = selected_enum_val
     
     # Seletor de período do gráfico (1m, 3m, 6m, 1y)
     period_selected = st.selectbox(
@@ -146,6 +149,30 @@ render_top_metrics(metrics, ticker_normalized, period_selected)
 
 st.markdown("---")
 
+# ==============================================================================
+# RADAR B3 / SCANNER DE TENDÊNCIA DE COMPRA E OPORTUNIDADES
+# ==============================================================================
+with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra / Ficar de Olho", expanded=False):
+    st.markdown(
+        "Identifique automaticamente quais das ações mais negociadas da Bolsa Brasileira (**B3**) "
+        "estão em **forte tendência de alta / sinal de compra** (Preço > MMA 9 > MMA 21) ou em zonas de "
+        "**reversão/rompimento altista** para acompanhar de perto."
+    )
+    col_scan_btn, col_scan_info = st.columns([1, 2])
+    with col_scan_btn:
+        btn_scan_radar = st.button("🔍 Escanear Mercado B3 Agora", type="secondary", use_container_width=True)
+    with col_scan_info:
+        st.caption("⚡ Análise técnica quantitativa baseada em médias móveis (MMA 9 e 21), variações e momentum dos ativos populares.")
+
+    if btn_scan_radar:
+        with st.spinner("Escaneando e ranqueando oportunidades nos principais ativos da B3..."):
+            st.session_state["b3_scan_results"] = scan_b3_market_opportunities()
+
+    if "b3_scan_results" in st.session_state and st.session_state["b3_scan_results"]:
+        render_scanner_results(st.session_state["b3_scan_results"])
+
+st.markdown("---")
+
 # Inicializar armazenamento da análise na sessão
 if "ai_analysis_data" not in st.session_state:
     st.session_state["ai_analysis_data"] = {}
@@ -202,7 +229,7 @@ st.markdown("---")
 # GRÁFICO INTERATIVO CANDLESTICK
 # ==============================================================================
 st.subheader("📈 Análise Gráfica Interativa")
-fig_candle = create_candlestick_chart(hist_data, ticker_normalized)
+fig_candle = create_candlestick_chart(hist_data, ticker_normalized, current_price=metrics['current_price'])
 st.plotly_chart(fig_candle, use_container_width=True)
 
 # ==============================================================================

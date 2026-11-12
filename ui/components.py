@@ -162,6 +162,75 @@ def render_news_expander(news_items: list, company_name: str):
                 """, unsafe_allow_html=True)
 
 
+def render_scanner_results(opportunities: list):
+    """
+    Renderiza o painel do Scanner de Oportunidades da B3 com destaques para ações
+    em tendência de compra ou que estão em zonas estratégicas para ficar de olho.
+    """
+    if not opportunities:
+        st.warning("Nenhum dado retornado no escaneamento. Tente novamente em instantes.")
+        return
+
+    # Contadores de categoria
+    compras = [op for op in opportunities if op["categoria"] == "COMPRA"]
+    olho = [op for op in opportunities if op["categoria"] == "OLHO"]
+    outros = [op for op in opportunities if op["categoria"] not in ("COMPRA", "OLHO")]
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("🚀 Tendência de Compra Forte", f"{len(compras)} ativos", "Sinal Altista")
+    with c2:
+        st.metric("👀 Para Ficar de Olho", f"{len(olho)} ativos", "Reversão / Rompimento")
+    with c3:
+        st.metric("📊 Total Escaneado", f"{len(opportunities)} ativos", "B3 Top Líquidas")
+
+    # Abas de navegação rápida
+    tab_compras, tab_olho, tab_todas = st.tabs([
+        f"🟢 Tendência de Compra ({len(compras)})",
+        f"🟡 Interessante Ficar de Olho ({len(olho)})",
+        f"📋 Todos os Ativos ({len(opportunities)})"
+    ])
+
+    def _render_cards(ops_subset):
+        if not ops_subset:
+            st.info("Nenhum ativo nesta categoria no momento.")
+            return
+
+        for op in ops_subset:
+            delta_cor = "#10b981" if op['daily_pct'] >= 0 else "#ef4444"
+            delta_5d_cor = "#10b981" if op['var5d'] >= 0 else "#ef4444"
+            badge_cor = "#10b981" if "Compra" in op['sinal'] else ("#f59e0b" if "Olho" in op['sinal'] else "#6b7280")
+
+            st.markdown(f"""
+            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 4px solid {badge_cor}; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                        <span style="font-size: 1.15rem; font-weight: 700; color: #ffffff;">{op['ticker']}</span>
+                        <span style="font-size: 0.95rem; color: #9ca3af; margin-left: 8px;">({op['company']})</span>
+                        <span style="background-color: {badge_cor}22; color: {badge_cor}; border: 1px solid {badge_cor}; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-left: 10px;">{op['sinal']}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-size: 1.15rem; font-weight: 700; color: #f3f4f6;">R$ {op['price']:.2f}</span>
+                        <span style="font-size: 0.9rem; font-weight: 600; color: {delta_cor}; margin-left: 10px;">Dia: {op['daily_pct']:+.2f}%</span>
+                        <span style="font-size: 0.9rem; font-weight: 600; color: {delta_5d_cor}; margin-left: 10px;">5D: {op['var5d']:+.2f}%</span>
+                    </div>
+                </div>
+                <div style="font-size: 0.88rem; color: #d1d5db; margin-top: 8px;">
+                    💡 <b>Racional Técnico:</b> {op['motivo']} &nbsp;|&nbsp; <span style="color: #9ca3af;">MMA9: R$ {op['sma9']:.2f} • MMA21: R$ {op['sma21']:.2f}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with tab_compras:
+        _render_cards(compras)
+
+    with tab_olho:
+        _render_cards(olho)
+
+    with tab_todas:
+        _render_cards(opportunities)
+
+
 def render_footer():
     """
     Renderiza o rodapé institucional da aplicação.

@@ -69,6 +69,43 @@ rondan-finance/
 
 ---
 
+## 🏷️ Histórico de Versões & Changelog
+
+| Versão | Data | Status | Destaques Principais |
+| :---: | :---: | :---: | :--- |
+| **`v1.3.0`** | `Nov/2026` | 🟢 **Atual** | Radar B3 (Scanner de oportunidades/compra), Cotação de hoje no Candlestick e correção de candles zerados |
+| **`v1.2.0`** | `Nov/2026` | ⚪ Estável | Integração Gemini 3.5 Flash Lite (500 req/dia), cotas dinâmicas e Enum de ativos B3 |
+| **`v1.1.0`** | `Nov/2026` | ⚪ Estável | Disparo de IA sob demanda por botão, cache de 30min e otimização drástica de tokens |
+| **`v1.0.0`** | `Nov/2026` | ⚪ Inicial | Lançamento inicial da arquitetura modular, Candlestick interativo e Feed RSS |
+
+<details open>
+<summary><b>🔍 Detalhes das Alterações por Versão</b></summary>
+
+### [`v1.3.0`] — Atual
+- **Adicionado:** **Radar B3 / Scanner de Oportunidades**: Botão e painel interativo para escanear automaticamente as principais ações da bolsa com tendência de compra (MMA 9 > MMA 21 com fluxo comprador) e ativos interessantes para "ficar de olho" (em rompimento/reversão).
+- **Adicionado:** Destaque visual da **Cotação de Hoje** no gráfico Candlestick através de linha horizontal tracejada (`hline`) estilizada com o valor mais recente e data formatada.
+- **Corrigido:** Sanitização e filtro de dados em `market_data.py` para eliminar candles zerados ou com anomalias de spread que ocorrem após o fechamento do pregão ou em horários noturnos no `yfinance`.
+- **Adicionado:** Seção e tabela padronizada de versionamento no `README.md`.
+
+### [`v1.2.0`]
+- **Adicionado:** Modelo **`gemini-3.5-flash-lite`** como padrão oficial, elevando a cota gratuita de 20 para **500 requisições diárias**.
+- **Corrigido:** Tratamento condicional de `thinking_config`, evitando erro `400 INVALID_ARGUMENT` em modelos que não suportam desativação de raciocínio prolongado.
+- **Adicionado:** Enum de ativos populares da B3 (`PopularB3Asset`) com suporte a código personalizado (`OUTRO`).
+- **Modificado:** Informação de cota diária (RPD) calculada dinamicamente por modelo na interface.
+
+### [`v1.1.0`]
+- **Modificado:** Chamadas à API Gemini agora são acionadas estritamente sob demanda via botão (`⚡ Gerar Diagnóstico com IA`).
+- **Adicionado:** Persistência dos resultados da IA em `st.session_state` e cache de 30 minutos via `@st.cache_data`.
+- **Otimizado:** Prompt enxuto com apenas 4 manchetes concisas, reduzindo o consumo de ~3.4k para ~800 tokens e acelerando a resposta.
+
+### [`v1.0.0`]
+- **Adicionado:** Estrutura modular em camadas (`services/`, `ui/`, `app.py`, `config.py`).
+- **Adicionado:** Gráfico Candlestick com médias móveis MMA 9 e MMA 21 e volume financeiro.
+- **Adicionado:** Feed de notícias integrado com Google News via RSS.
+</details>
+
+---
+
 ## 🛠️ Instalação e Execução
 
 ### 1. Criar o Ambiente Virtual e Instalar Dependências
