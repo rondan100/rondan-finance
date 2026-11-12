@@ -73,21 +73,31 @@ PERIOD_MAPPING = {
     "1y": "1y"
 }
 
-# Modelos disponíveis por ordem de prioridade.
-# gemini-3.5-flash-lite: 500 req/dia (padrão) — NÃO suporta thinking_config
-# gemini-3.8-flash:      20 req/dia (fallback) — suporta thinking_config
-# gemini-3.6-flash:      20 req/dia (fallback) — suporta thinking_config
+# Modelos disponíveis (Suporte a Google AI Pro e Camada Gratuita).
+# Ordenados por prioridade / recomendação:
+# - gemini-3.5-flash-lite: Super rápido, alta cota (500 req/dia Free / Ilimitado Pro)
+# - gemini-1.5-pro:        Carro-chefe analítico Pro para finanças e fundamentos
+# - gemini-3.8-pro:        Modelo Pro de última geração para raciocínio complexo
+# - argon:                 Modelo Pro / Experimental de alta inteligência
+# - gemini-3.8-flash:      20 req/dia Free ou alta cota Pro
+# - gemini-3.6-flash:      20 req/dia Free ou alta cota Pro
 GEMINI_MODELS = [
     "gemini-3.5-flash-lite",
+    "gemini-1.5-pro",
+    "gemini-3.8-pro",
+    "argon",
     "gemini-3.8-flash",
     "gemini-3.6-flash",
 ]
 
-# Cota diária gratuita de cada modelo (RPD — Requests Per Day no Google AI Studio)
+# Descrição de cotas e perfil por modelo (Google AI Free vs Pro)
 GEMINI_MODEL_RPD = {
-    "gemini-3.5-flash-lite": 500,
-    "gemini-3.8-flash":       20,
-    "gemini-3.6-flash":       20,
+    "gemini-3.5-flash-lite": "500 req/dia (Free) ou Ilimitado (Pro)",
+    "gemini-1.5-pro":        "Tier Pro (Análise Fundamentalista Profunda)",
+    "gemini-3.8-pro":        "Tier Pro (Raciocínio Avançado & Estratégias)",
+    "argon":                 "Tier Pro (Modelo Experimental Especializado)",
+    "gemini-3.8-flash":      "20 req/dia (Free) ou Alta Cota (Pro)",
+    "gemini-3.6-flash":      "20 req/dia (Free) ou Alta Cota (Pro)",
 }
 
 # Tempos de expiração de cache (TTL em segundos)

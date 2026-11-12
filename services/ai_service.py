@@ -1,9 +1,11 @@
 """
 Módulo de integração com a API Google Gemini (google-genai).
-Suporta múltiplos modelos com detecção automática de capacidades:
-- gemini-3.5-flash-lite: 500 req/dia (padrão recomendado, sem thinking_config)
-- gemini-3.8-flash / gemini-3.6-flash: 20 req/dia (suportam thinking_config)
-Retry inteligente contra picos de 503 UNAVAILABLE e cache de 30 minutos.
+Suporta múltiplos modelos com detecção automática de capacidades e suporte ao Google AI Pro:
+- gemini-3.5-flash-lite: 500 req/dia Free / Ilimitado Pro
+- gemini-1.5-pro / gemini-3.8-pro: Modelos analíticos do Google AI Pro
+- argon: Modelo experimental avançado Pro
+- gemini-3.8-flash / gemini-3.6-flash
+Disponibiliza diagnóstico preditivo estruturado e assistente conversacional sobre ativos.
 """
 
 import json
@@ -15,8 +17,32 @@ from config import GEMINI_MODELS, CACHE_TTL_AI
 
 def get_available_models(api_key: str = "") -> list[str]:
     """
-    Retorna a lista de modelos recomendados e ativos.
+    Retorna a lista de modelos disponíveis.
+    Se o usuário informou uma API Key válida, tenta descobrir modelos ativos na conta
+    (incluindo Pro e experimentais como argon), fazendo fallback para GEMINI_MODELS.
     """
+    if not api_key or api_key == "sua_chave_aqui":
+        return GEMINI_MODELS
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        discovered = []
+        for m in client.models.list():
+            # Extrai o nome do modelo (ex: models/gemini-1.5-pro -> gemini-1.5-pro)
+            m_name = getattr(m, "name", str(m)).replace("models/", "").strip()
+            # Filtra modelos de texto/geração relevantes
+            if any(k in m_name.lower() for k in ["gemini", "argon"]) and not any(k in m_name.lower() for k in ["vision-deprecated", "embedding", "aqa"]):
+                discovered.append(m_name)
+        
+        if discovered:
+            # Garante que os modelos preferenciais apareçam no topo
+            ordered = [m for m in GEMINI_MODELS if m in discovered]
+            extras = [m for m in discovered if m not in ordered]
+            return ordered + extras if ordered else discovered
+    except Exception:
+        pass
+
     return GEMINI_MODELS
 
 
@@ -66,8 +92,8 @@ Retorne OBRIGATORIAMENTE e EXCLUSIVAMENTE um objeto JSON estrito com o seguinte 
         client = genai.Client(api_key=api_key)
 
     # Modelos que suportam ThinkingConfig (desativar reasoning mode para ser mais rápido)
-    # gemini-3.5-flash-lite NÃO suporta thinking_config → retorna 400 INVALID_ARGUMENT
-    MODELOS_COM_THINKING = {"gemini-3.8-flash", "gemini-3.6-flash"}
+    # gemini-3.5-flash-lite, 1.5-pro e argon NÃO requerem thinking_config
+    MODELOS_COM_THINKING = {"gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.8-pro"}
 
     # Lista de modelos a tentar: o preferencial primeiro, depois os fallbacks do config
     modelos_a_tentar = [modelo]
@@ -167,3 +193,93 @@ Retorne OBRIGATORIAMENTE e EXCLUSIVAMENTE um objeto JSON estrito com o seguinte 
         )
 
     raise Exception(f"Erro ao consultar o modelo '{modelo_atual}': {ultimo_erro}")
+
+
+def consultar_ia_sobre_ativo(
+    ticker: str,
+    company_name: str,
+    pergunta_usuario: str,
+    dados_mercado_str: str,
+    titulos_noticias_str: str,
+    tendencia_atual_str: str,
+    api_key: str,
+    modelo_preferencial: str = None
+) -> dict:
+    """
+    Consulta o modelo Gemini (incluindo opções do Google AI Pro como gemini-1.5-pro,
+    gemini-3.8-pro e argon) para responder a dúvidas personalizadas sobre o ativo.
+    O prompt inclui previamente o contexto técnico do gráfico, as notícias e a tendência.
+    """
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        raise Exception("A biblioteca 'google-genai' não está instalada. Execute: pip install google-genai")
+
+    if not api_key or api_key == "sua_chave_aqui":
+        raise Exception("Chave da API do Gemini não configurada.")
+
+    modelo = modelo_preferencial if modelo_preferencial in GEMINI_MODELS else GEMINI_MODELS[0]
+
+    try:
+        client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
+    except Exception:
+        client = genai.Client(api_key=api_key)
+
+    prompt = f"""Você é um analista financeiro sênior especializado no mercado acionário brasileiro (B3).
+O investidor está acompanhando a ação {ticker} ({company_name}) e fez a seguinte pergunta:
+
+❓ PERGUNTA DO INVESTIDOR:
+"{pergunta_usuario}"
+
+Considere obrigatoriamente os seguintes dados em tempo real para embasar sua resposta:
+
+📊 CONTEXTO DO GRÁFICO E INDICADORES TÉCNICOS:
+{dados_mercado_str}
+
+📈 TENDÊNCIA PROJETADA ATUAL:
+{tendencia_atual_str}
+
+📰 MANCHETES DE NOTÍCIAS RECENTES:
+{titulos_noticias_str}
+
+DIRETRIZES DA RESPOSTA:
+1. Responda diretamente à dúvida do investidor em tom profissional, objetivo e fundamentado.
+2. Relacione explicitamente a pergunta com o comportamento do gráfico (médias móveis MMA 9/21, suportes ou variações recentes) e o cenário das notícias.
+3. Destaque pontos de atenção, riscos e possíveis catalisadores para o ativo.
+4. Use formatação limpa em tópicos com negritos para facilitar a leitura.
+"""
+
+    config_args = {
+        "temperature": 0.4,
+        "max_output_tokens": 900,
+    }
+
+    MODELOS_COM_THINKING = {"gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.8-pro"}
+    if modelo in MODELOS_COM_THINKING and hasattr(types, "ThinkingConfig"):
+        try:
+            config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        except Exception:
+            pass
+
+    fast_config = types.GenerateContentConfig(**config_args)
+
+    modelos_tentativa = [modelo] + [m for m in GEMINI_MODELS if m != modelo]
+    ultimo_erro = None
+
+    for m_atual in modelos_tentativa:
+        try:
+            resp = client.models.generate_content(
+                model=m_atual,
+                contents=prompt,
+                config=fast_config
+            )
+            return {
+                "resposta": resp.text.strip(),
+                "modelo_utilizado": m_atual
+            }
+        except Exception as e:
+            ultimo_erro = e
+            continue
+
+    raise Exception(f"Erro ao obter resposta da IA: {ultimo_erro}")

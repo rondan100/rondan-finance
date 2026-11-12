@@ -71,17 +71,29 @@ rondan-finance/
 
 ## 🏷️ Histórico de Versões & Changelog
 
-| Versão | Data | Status | Destaques Principais |
-| :---: | :---: | :---: | :--- |
-| **`v1.3.0`** | `Nov/2026` | 🟢 **Atual** | Radar B3 (Scanner de oportunidades/compra), Cotação de hoje no Candlestick e correção de candles zerados |
-| **`v1.2.0`** | `Nov/2026` | ⚪ Estável | Integração Gemini 3.5 Flash Lite (500 req/dia), cotas dinâmicas e Enum de ativos B3 |
-| **`v1.1.0`** | `Nov/2026` | ⚪ Estável | Disparo de IA sob demanda por botão, cache de 30min e otimização drástica de tokens |
-| **`v1.0.0`** | `Nov/2026` | ⚪ Inicial | Lançamento inicial da arquitetura modular, Candlestick interativo e Feed RSS |
+O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}`):
+- **`MAJOR` (Principal):** Mudanças estruturais de grande porte ou alterações de arquitetura.
+- **`MINOR` (Recursos):** Novas funcionalidades relevantes mantendo compatibilidade retroativa.
+- **`PATCH` (Correções):** Correções de bugs, ajustes finos e melhorias pontuais de performance.
+
+| Versão | Data | Status | Tipo | Destaques Principais |
+| :---: | :---: | :---: | :---: | :--- |
+| **`v1.4.0`** | `Nov/2026` | 🟢 **Atual** | `MINOR` | Suporte ao Google AI Pro (modelos Pro e `argon`), barra de pesquisa/chat com IA contextualizada com gráfico e notícias |
+| **`v1.3.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Radar B3 (Scanner de oportunidades/compra), Cotação de hoje no Candlestick e correção de candles zerados |
+| **`v1.2.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Integração Gemini 3.5 Flash Lite (500 req/dia), cotas dinâmicas e Enum de ativos B3 |
+| **`v1.1.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Disparo de IA sob demanda por botão, cache de 30min e otimização drástica de tokens |
+| **`v1.0.0`** | `Nov/2026` | ⚪ Inicial | `MAJOR` | Lançamento inicial da arquitetura modular, Candlestick interativo e Feed RSS |
 
 <details open>
 <summary><b>🔍 Detalhes das Alterações por Versão</b></summary>
 
-### [`v1.3.0`] — Atual
+### [`v1.4.0`] — Atual
+- **Adicionado:** Suporte oficial a assinaturas **Google AI Pro** e modelos analíticos avançados: `gemini-1.5-pro`, `gemini-3.8-pro`, `argon` (experimental) e opção de digitar modelos customizados.
+- **Adicionado:** Descoberta dinâmica de modelos habilitados na conta do usuário via `client.models.list()`.
+- **Adicionado:** **Assistente Interativo de Consulta com IA**: Barra de pesquisa/chat onde o investidor faz perguntas diretas sobre o ativo selecionado. O modelo recebe automaticamente o contexto técnico do gráfico (preço, MMA 9/21, extremos), as últimas notícias do Google News e o diagnóstico de tendência.
+- **Adicionado:** Botões com chips rápidos de perguntas frequentes (Médias móveis, Impacto de notícias, Dividendos e Riscos).
+
+### [`v1.3.0`]
 - **Adicionado:** **Radar B3 / Scanner de Oportunidades**: Botão e painel interativo para escanear automaticamente as principais ações da bolsa com tendência de compra (MMA 9 > MMA 21 com fluxo comprador) e ativos interessantes para "ficar de olho" (em rompimento/reversão).
 - **Adicionado:** Destaque visual da **Cotação de Hoje** no gráfico Candlestick através de linha horizontal tracejada (`hline`) estilizada com o valor mais recente e data formatada.
 - **Corrigido:** Sanitização e filtro de dados em `market_data.py` para eliminar candles zerados ou com anomalias de spread que ocorrem após o fechamento do pregão ou em horários noturnos no `yfinance`.

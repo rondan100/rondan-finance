@@ -26,6 +26,7 @@ from ui.components import (
     render_reasons_and_variables,
     render_news_expander,
     render_scanner_results,
+    render_asset_qa_section,
     render_footer
 )
 
@@ -99,15 +100,30 @@ with st.sidebar:
     )
     active_api_key = gemini_key_input.strip() if gemini_key_input.strip() else env_gemini_key
 
-    # Descoberta dinâmica de modelos disponíveis para a chave do usuário
+    # Descoberta dinâmica de modelos disponíveis para a chave do usuário (incluindo Pro e Argon)
     available_models = get_available_models(active_api_key)
-    selected_model = st.selectbox(
-        "Modelo do Gemini:",
-        options=available_models,
+    model_options = available_models + ["Outro (digitar modelo)"] if "Outro (digitar modelo)" not in available_models else available_models
+
+    model_choice = st.selectbox(
+        "Modelo do Gemini / Google AI Pro:",
+        options=model_options,
         index=0,
-        help="Modelo do Google Gemini utilizado para a análise."
+        help="Modelos da família Gemini e Google AI Studio Pro (ex: gemini-1.5-pro, gemini-3.8-pro, argon)."
     )
-    st.caption("⚡ **Cache Inteligente (30 min):** Evita chamadas repetidas e erro 503")
+
+    if model_choice == "Outro (digitar modelo)":
+        custom_model = st.text_input(
+            "Nome do modelo:",
+            value="argon",
+            placeholder="Ex: argon, gemini-exp-1206...",
+            help="Informe o identificador exato do modelo habilitado na sua conta Google AI."
+        )
+        selected_model = custom_model.strip() if custom_model.strip() else "gemini-3.5-flash-lite"
+    else:
+        selected_model = model_choice
+
+    rpd_desc = GEMINI_MODEL_RPD.get(selected_model, "Google AI Pro / Custom")
+    st.caption(f"⚡ **Capacidade:** `{selected_model}` ({rpd_desc})")
     
     st.markdown("---")
     
@@ -236,6 +252,19 @@ st.plotly_chart(fig_candle, use_container_width=True)
 # SEÇÃO SANFONADA DE NOTÍCIAS (EXPANDER)
 # ==============================================================================
 render_news_expander(news_items, company_name)
+
+# ==============================================================================
+# ASSISTENTE INTERATIVO DE CONSULTA COM IA (CONTEXTO DO ATIVO)
+# ==============================================================================
+render_asset_qa_section(
+    ticker=ticker_normalized,
+    company_name=company_name,
+    metrics=metrics,
+    news_items=news_items,
+    current_analysis=current_analysis,
+    api_key=active_api_key,
+    selected_model=selected_model
+)
 
 # Rodapé
 render_footer()

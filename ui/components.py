@@ -231,13 +231,119 @@ def render_scanner_results(opportunities: list):
         _render_cards(opportunities)
 
 
+def render_asset_qa_section(
+    ticker: str,
+    company_name: str,
+    metrics: dict,
+    news_items: list,
+    current_analysis: dict,
+    api_key: str,
+    selected_model: str
+):
+    """
+    Renderiza a barra de pesquisa e assistente interativo com IA sobre o ativo selecionado.
+    A IA responde utilizando o contexto técnico do gráfico, as últimas notícias e a tendência.
+    """
+    st.markdown("---")
+    st.subheader(f"💬 Pergunte à IA sobre {ticker}")
+    st.caption(
+        "Faça qualquer pergunta técnica ou fundamentalista. A IA responderá considerando "
+        "automaticamente a **cotação atual, médias móveis do gráfico, últimas notícias e a tendência projetada**."
+    )
+
+    if not api_key or api_key == "sua_chave_aqui":
+        st.info("💡 Insira sua API Key do Gemini na barra lateral para habilitar o assistente conversacional.")
+        return
+
+    # Histórico de perguntas na sessão
+    session_qa_key = f"qa_history_{ticker}"
+    if session_qa_key not in st.session_state:
+        st.session_state[session_qa_key] = []
+
+    # Sugestões rápidas de perguntas
+    st.markdown("<span style='font-size: 0.85rem; color: #9ca3af;'>💡 Sugestões de perguntas rápidas:</span>", unsafe_allow_html=True)
+    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+
+    sugestao_escolhida = None
+    with col_s1:
+        if st.button("📊 Comportamento das Médias", key="sug_1", use_container_width=True):
+            sugestao_escolhida = f"Como o cruzamento da MMA 9 e MMA 21 afeta a perspectiva de curto prazo de {ticker}?"
+    with col_s2:
+        if st.button("📰 Impacto das Notícias", key="sug_2", use_container_width=True):
+            sugestao_escolhida = f"Qual o impacto das notícias recentes no valuation e preço de {ticker}?"
+    with col_s3:
+        if st.button("💰 Dividendos & Preço", key="sug_3", use_container_width=True):
+            sugestao_escolhida = f"Vale a pena manter {ticker} na carteira visando dividendos e fluxo de caixa?"
+    with col_s4:
+        if st.button("⚠️ Principais Riscos", key="sug_4", use_container_width=True):
+            sugestao_escolhida = f"Quais são os maiores riscos macroeconômicos e setoriais para {ticker} agora?"
+
+    # Campo de busca e formulário
+    with st.form(key=f"form_qa_{ticker}"):
+        default_val = sugestao_escolhida if sugestao_escolhida else ""
+        user_question = st.text_input(
+            "Digite sua dúvida sobre o ativo:",
+            value=default_val,
+            placeholder=f"Ex: Vale a pena comprar {ticker} no preço atual de R$ {metrics['current_price']:.2f}? Qual o suporte mais importante?",
+            help="Pressione Enter ou clique em Consultar IA para obter o parecer contextualizado."
+        )
+        col_btn_submit, col_info_submit = st.columns([1, 3])
+        with col_btn_submit:
+            submit_question = st.form_submit_button("🔍 Consultar IA", type="primary", use_container_width=True)
+        with col_info_submit:
+            st.caption(f"Motor: `{selected_model}` • Contexto do gráfico e notícias ativo.")
+
+    if submit_question and user_question.strip():
+        from services.ai_service import consultar_ia_sobre_ativo
+        from services.news_service import format_news_for_prompt
+
+        titulos_noticias = format_news_for_prompt(news_items, max_titles=5)
+        tendencia_str = current_analysis.get("tendencia", "Em análise") if current_analysis else "Não consultada"
+
+        with st.spinner(f"Consultando {selected_model} com contexto completo do ativo..."):
+            try:
+                qa_res = consultar_ia_sobre_ativo(
+                    ticker=ticker,
+                    company_name=company_name,
+                    pergunta_usuario=user_question.strip(),
+                    dados_mercado_str=metrics.get("summary_line", ""),
+                    titulos_noticias_str=titulos_noticias,
+                    tendencia_atual_str=f"Tendência: {tendencia_str}",
+                    api_key=api_key,
+                    modelo_preferencial=selected_model
+                )
+                # Salva no histórico da sessão
+                st.session_state[session_qa_key].insert(0, {
+                    "pergunta": user_question.strip(),
+                    "resposta": qa_res["resposta"],
+                    "modelo": qa_res["modelo_utilizado"]
+                })
+            except Exception as e:
+                st.error(f"Erro ao responder: {e}")
+
+    # Exibe as respostas recentes
+    if st.session_state[session_qa_key]:
+        for idx, item in enumerate(st.session_state[session_qa_key]):
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #334155; border-radius: 10px; padding: 20px; margin-top: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">
+                    <span style="font-weight: 700; color: #38bdf8; font-size: 1.05rem;">❓ {item['pergunta']}</span>
+                    <span style="background-color: #2563eb33; color: #60a5fa; border: 1px solid #2563eb; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 9999px;">IA: {item['modelo']}</span>
+                </div>
+                <div style="font-size: 0.98rem; line-height: 1.65; color: #e2e8f0;">
+                    {item['resposta']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
 def render_footer():
     """
     Renderiza o rodapé institucional da aplicação.
     """
     st.markdown("""
     <div style="text-align: center; color: #6b7280; font-size: 0.85rem; margin-top: 40px; padding: 20px 0; border-top: 1px solid #1f2937;">
-        Dashboard Financeiro B3 • Arquitetura Modular em Python & Streamlit • Motor de IA Google Gemini (gemini-3.5-flash-lite).<br>
+        Dashboard Financeiro B3 • Arquitetura Modular em Python & Streamlit • Motor de IA Google Gemini & Google AI Pro.<br>
         <i>Aviso: As análises têm caráter informativo e educacional e não representam recomendação formal de compra ou venda de ativos.</i>
     </div>
     """, unsafe_allow_html=True)
