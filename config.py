@@ -7,8 +7,9 @@ from enum import Enum
 
 class PopularB3Asset(str, Enum):
     """
-    Enumeração das ações mais populares e negociadas na B3.
+    Enumeração das ações, units e BDRs mais populares e negociados na B3.
     """
+    # Lista original (com tickers atualizados)
     PETR4 = "PETR4.SA - Petrobras (PN)"
     VALE3 = "VALE3.SA - Vale (ON)"
     ITUB4 = "ITUB4.SA - Itaú Unibanco (PN)"
@@ -20,19 +21,43 @@ class PopularB3Asset(str, Enum):
     MGLU3 = "MGLU3.SA - Magazine Luiza (ON)"
     RENT3 = "RENT3.SA - Localiza (ON)"
     SUZB3 = "SUZB3.SA - Suzano (ON)"
-    JBSS3 = "JBSS3.SA - JBS (ON)"
+    JBSS32 = "JBSS32.SA - JBS (BDR)"
     B3SA3 = "B3SA3.SA - B3 Bolsa Balcão (ON)"
     GGBR4 = "GGBR4.SA - Gerdau (PN)"
     CSNA3 = "CSNA3.SA - CSN Siderúrgica (ON)"
-    EMBR3 = "EMBR3.SA - Embraer (ON)"
-    ELET3 = "ELET3.SA - Eletrobras (ON)"
-    RADL3 = "RADL3.SA - Raia Drogasil (ON)"
+    EMBJ3 = "EMBJ3.SA - Embraer (ON)"
+    AXIA3 = "AXIA3.SA - Axia Energia / ex-Eletrobras (ON)"
+    RADL3 = "RADL3.SA - RD Saúde / Raia Drogasil (ON)"
     VIVT3 = "VIVT3.SA - Telefônica Vivo (ON)"
     RAIZ4 = "RAIZ4.SA - Raízen (PN)"
     EQTL3 = "EQTL3.SA - Equatorial Energia (ON)"
     LREN3 = "LREN3.SA - Lojas Renner (ON)"
     CMIN3 = "CMIN3.SA - CSN Mineração (ON)"
     ASAI3 = "ASAI3.SA - Assaí Atacadista (ON)"
+
+    # +20 tickers populares adicionados
+    PETR3 = "PETR3.SA - Petrobras (ON)"
+    ITSA4 = "ITSA4.SA - Itaúsa (PN)"
+    BPAC11 = "BPAC11.SA - BTG Pactual (Unit)"
+    SANB11 = "SANB11.SA - Santander Brasil (Unit)"
+    SBSP3 = "SBSP3.SA - Sabesp (ON)"
+    CMIG4 = "CMIG4.SA - Cemig (PN)"
+    CPLE3 = "CPLE3.SA - Copel (ON)"
+    TAEE11 = "TAEE11.SA - Taesa (Unit)"
+    EGIE3 = "EGIE3.SA - Engie Brasil (ON)"
+    VBBR3 = "VBBR3.SA - Vibra Energia (ON)"
+    UGPA3 = "UGPA3.SA - Ultrapar (ON)"
+    CSAN3 = "CSAN3.SA - Cosan (ON)"
+    RAIL3 = "RAIL3.SA - Rumo Logística (ON)"
+    KLBN11 = "KLBN11.SA - Klabin (Unit)"
+    RDOR3 = "RDOR3.SA - Rede D'Or (ON)"
+    HAPV3 = "HAPV3.SA - Hapvida (ON)"
+    TOTS3 = "TOTS3.SA - TOTVS (ON)"
+    TIMS3 = "TIMS3.SA - TIM Brasil (ON)"
+    MULT3 = "MULT3.SA - Multiplan (ON)"
+    BRAV3 = "BRAV3.SA - Brava Energia (ON)"
+
+    # Opção manual
     OUTRO = "OUTRO - Digitar código personalizado"
 
 
@@ -85,7 +110,7 @@ B3_ASSET_NAMES = {
     "ABEV3": "Ambev",
     "MGLU3": "Magazine Luiza",
     "WEGE3": "WEG",
-    "RENT3": "Localiza",
+    "RENT3": "Localiza veículos",
     "SUZB3": "Suzano",
     "JBSS3": "JBS",
     "B3SA3": "B3 Bolsa Balcão",
