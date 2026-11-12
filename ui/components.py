@@ -191,44 +191,75 @@ def render_scanner_results(opportunities: list):
         f"📋 Todos os Ativos ({len(opportunities)})"
     ])
 
-    def _render_cards(ops_subset):
+    def _render_cards(ops_subset, tab_key="radar"):
         if not ops_subset:
             st.info("Nenhum ativo nesta categoria no momento.")
             return
+
+        from config import PopularB3Asset
 
         for op in ops_subset:
             delta_cor = "#10b981" if op['daily_pct'] >= 0 else "#ef4444"
             delta_5d_cor = "#10b981" if op['var5d'] >= 0 else "#ef4444"
             badge_cor = "#10b981" if "Compra" in op['sinal'] else ("#f59e0b" if "Olho" in op['sinal'] else "#6b7280")
 
-            st.markdown(f"""
-            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 4px solid {badge_cor}; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                    <div>
-                        <span style="font-size: 1.15rem; font-weight: 700; color: #ffffff;">{op['ticker']}</span>
-                        <span style="font-size: 0.95rem; color: #9ca3af; margin-left: 8px;">({op['company']})</span>
-                        <span style="background-color: {badge_cor}22; color: {badge_cor}; border: 1px solid {badge_cor}; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-left: 10px;">{op['sinal']}</span>
+            col_card_info, col_card_btn = st.columns([5, 1.2])
+
+            with col_card_info:
+                st.markdown(f"""
+                <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 4px solid {badge_cor}; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <span style="font-size: 1.15rem; font-weight: 700; color: #ffffff;">{op['ticker']}</span>
+                            <span style="font-size: 0.95rem; color: #9ca3af; margin-left: 8px;">({op['company']})</span>
+                            <span style="background-color: {badge_cor}22; color: {badge_cor}; border: 1px solid {badge_cor}; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-left: 10px;">{op['sinal']}</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 1.15rem; font-weight: 700; color: #f3f4f6;">R$ {op['price']:.2f}</span>
+                            <span style="font-size: 0.9rem; font-weight: 600; color: {delta_cor}; margin-left: 10px;">Dia: {op['daily_pct']:+.2f}%</span>
+                            <span style="font-size: 0.9rem; font-weight: 600; color: {delta_5d_cor}; margin-left: 10px;">5D: {op['var5d']:+.2f}%</span>
+                        </div>
                     </div>
-                    <div style="text-align: right;">
-                        <span style="font-size: 1.15rem; font-weight: 700; color: #f3f4f6;">R$ {op['price']:.2f}</span>
-                        <span style="font-size: 0.9rem; font-weight: 600; color: {delta_cor}; margin-left: 10px;">Dia: {op['daily_pct']:+.2f}%</span>
-                        <span style="font-size: 0.9rem; font-weight: 600; color: {delta_5d_cor}; margin-left: 10px;">5D: {op['var5d']:+.2f}%</span>
+                    <div style="font-size: 0.88rem; color: #d1d5db; margin-top: 6px;">
+                        💡 <b>Racional Técnico:</b> {op['motivo']} &nbsp;|&nbsp; <span style="color: #9ca3af;">MMA9: R$ {op['sma9']:.2f} • MMA21: R$ {op['sma21']:.2f}</span>
                     </div>
                 </div>
-                <div style="font-size: 0.88rem; color: #d1d5db; margin-top: 8px;">
-                    💡 <b>Racional Técnico:</b> {op['motivo']} &nbsp;|&nbsp; <span style="color: #9ca3af;">MMA9: R$ {op['sma9']:.2f} • MMA21: R$ {op['sma21']:.2f}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+
+            with col_card_btn:
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                btn_clicado = st.button(
+                    "📊 Analisar",
+                    key=f"btn_radar_sel_{op['ticker']}_{tab_key}",
+                    use_container_width=True,
+                    help=f"Carregar {op['ticker']} ({op['company']}) no Dashboard Principal"
+                )
+                if btn_clicado:
+                    target_enum = None
+                    for asset in PopularB3Asset:
+                        # Compara o código com ou sem .SA
+                        asset_code = asset.value.split(" - ")[0].strip()
+                        if op['ticker'] == asset_code or op['ticker'].replace(".SA", "") == asset_code.replace(".SA", ""):
+                            target_enum = asset.value
+                            break
+                    if not target_enum:
+                        target_enum = op['ticker']
+
+                    # Define a intenção de troca de ativo para o topo do ciclo de vida do Streamlit
+                    st.session_state["target_asset_to_select"] = target_enum
+                    # Fecha o painel do radar para que o usuário veja diretamente o dashboard principal
+                    st.session_state["radar_expander_open"] = False
+                    st.toast(f"✅ {op['ticker']} carregado no Dashboard Principal!", icon="🚀")
+                    st.rerun()
 
     with tab_compras:
-        _render_cards(compras)
+        _render_cards(compras, tab_key="compras")
 
     with tab_olho:
-        _render_cards(olho)
+        _render_cards(olho, tab_key="olho")
 
     with tab_todas:
-        _render_cards(opportunities)
+        _render_cards(opportunities, tab_key="todas")
 
 
 def render_asset_qa_section(

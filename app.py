@@ -54,13 +54,24 @@ with st.sidebar:
     st.title("Parâmetros do Ativo")
     st.markdown("Selecione uma ação da B3 e configure o período para análise técnica e diagnósticos com IA.")
     
+    # Opções de ativos e sincronização com o estado da sessão (permite clique no Radar B3)
+    asset_options = [asset.value for asset in PopularB3Asset]
+
+    # Se houver um ativo solicitado pelo Radar B3, atualiza ANTES de instanciar o selectbox
+    if "target_asset_to_select" in st.session_state and st.session_state["target_asset_to_select"]:
+        st.session_state["sidebar_asset_select"] = st.session_state.pop("target_asset_to_select")
+
+    if "sidebar_asset_select" not in st.session_state or st.session_state["sidebar_asset_select"] not in asset_options:
+        st.session_state["sidebar_asset_select"] = asset_options[0]
+
     # Campo de seleção da ação B3 via Enum com os assets mais populares
     selected_enum_val = st.selectbox(
         "Ação da B3 (Ativos Populares):",
-        options=[asset.value for asset in PopularB3Asset],
-        index=0,  # Padrão: PETR4.SA - Petrobras (PN)
+        options=asset_options,
+        key="sidebar_asset_select",
         help="Escolha diretamente entre as ações mais negociadas da B3 ou selecione 'OUTRO' para digitar qualquer ticker."
     )
+    st.session_state["selected_asset"] = selected_enum_val
     
     if selected_enum_val == PopularB3Asset.OUTRO.value:
         user_ticker = st.text_input(
@@ -168,7 +179,10 @@ st.markdown("---")
 # ==============================================================================
 # RADAR B3 / SCANNER DE TENDÊNCIA DE COMPRA E OPORTUNIDADES
 # ==============================================================================
-with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra / Ficar de Olho", expanded=False):
+if "radar_expander_open" not in st.session_state:
+    st.session_state["radar_expander_open"] = False
+
+with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra / Ficar de Olho", expanded=st.session_state["radar_expander_open"]):
     st.markdown(
         "Identifique automaticamente quais das ações mais negociadas da Bolsa Brasileira (**B3**) "
         "estão em **forte tendência de alta / sinal de compra** (Preço > MMA 9 > MMA 21) ou em zonas de "
@@ -192,6 +206,7 @@ with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra / Fic
         st.caption(f"⚡ Análise quantitativa de médias móveis (MMA 9/21) e momentum em **{qtd_label}**.")
 
     if btn_scan_radar:
+        st.session_state["radar_expander_open"] = True
         with st.spinner(f"Escaneando e ranqueando oportunidades em {qtd_label}..."):
             st.session_state["b3_scan_results"] = scan_b3_market_opportunities(scan_all=scan_all_flag)
 
