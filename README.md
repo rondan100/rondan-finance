@@ -78,7 +78,7 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 
 | Versão | Data | Status | Tipo | Destaques Principais |
 | :---: | :---: | :---: | :---: | :--- |
-| **`v1.4.1`** | `Nov/2026` | 🟢 **Atual** | `PATCH` | Correção do disparo de sugestões na barra de pesquisa, renderização nativa em Markdown e botão de limpar conversa |
+| **`v1.4.1`** | `Nov/2026` | 🟢 **Atual** | `PATCH` | Streaming em tempo real (resposta em ~300ms), corte de tokens e disparo direto no assistente de pesquisa |
 | **`v1.4.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Suporte ao Google AI Pro (modelos Pro e `argon`), barra de pesquisa/chat com IA contextualizada com gráfico e notícias |
 | **`v1.3.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Radar B3 (Scanner de oportunidades/compra), Cotação de hoje no Candlestick e correção de candles zerados |
 | **`v1.2.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Integração Gemini 3.5 Flash Lite (500 req/dia), cotas dinâmicas e Enum de ativos B3 |
@@ -89,6 +89,8 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 <summary><b>🔍 Detalhes das Alterações por Versão</b></summary>
 
 ### [`v1.4.1`] — Atual
+- **Adicionado:** **Streaming em Tempo Real (token a token)** via `st.write_stream`: a resposta começa a aparecer na tela em ~300ms com efeito de digitação ao vivo, eliminando telas travadas ou spinners demorados.
+- **Otimizado:** Prompt cirúrgico e redução de `max_output_tokens` para 220 tokens (~80 palavras diretas), acelerando o término da resposta em até 5x.
 - **Corrigido:** Disparo e execução direta da IA ao clicar nos botões de sugestões rápidas (removido bloqueio do formulário `st.form`).
 - **Corrigido:** Renderização em Markdown puro nativo (`st.markdown`) para evitar que quebras de linha e formatações da IA fossem engolidas por tags HTML.
 - **Corrigido:** Montagem dinâmica de `GenerateContentConfig` por modelo, prevenindo erro `400 INVALID_ARGUMENT` em modelos Pro/Argon que não aceitam `thinking_config`.

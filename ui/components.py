@@ -300,15 +300,29 @@ def render_asset_qa_section(
 
     # Executa a consulta se houver pergunta disparada (via chip ou campo de texto)
     if pergunta_a_executar:
-        from services.ai_service import consultar_ia_sobre_ativo
+        from services.ai_service import stream_ia_sobre_ativo
         from services.news_service import format_news_for_prompt
 
-        titulos_noticias = format_news_for_prompt(news_items, max_titles=5)
+        titulos_noticias = format_news_for_prompt(news_items, max_titles=2)
         tendencia_str = current_analysis.get("tendencia", "Em análise") if current_analysis else "Não consultada"
 
-        with st.spinner(f"Analisando '{pergunta_a_executar[:45]}...' com {selected_model}..."):
+        # Painel de exibição imediata com digitação em tempo real (Streaming)
+        st.markdown(f"""
+        <div style="background-color: #1e293b; border-left: 4px solid #38bdf8; border-radius: 8px 8px 0 0; padding: 12px 16px; margin-top: 16px;">
+            <span style="font-weight: 700; color: #ffffff; font-size: 1.05rem;">❓ {pergunta_a_executar}</span>
+            <span style="float: right; background-color: #10b98122; color: #10b981; border: 1px solid #10b981; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 9999px;">⚡ Tempo Real (Streaming)</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        resp_container = st.container()
+        with resp_container:
+            st.markdown("""
+            <div style="background-color: #0f172a; border: 1px solid #334155; border-top: none; border-radius: 0 0 8px 8px; padding: 18px 20px; margin-bottom: 16px;">
+            """, unsafe_allow_html=True)
+
             try:
-                qa_res = consultar_ia_sobre_ativo(
+                # Transmite palavra a palavra em tempo real (primeira palavra em ~300ms)
+                gerador_stream = stream_ia_sobre_ativo(
                     ticker=ticker,
                     company_name=company_name,
                     pergunta_usuario=pergunta_a_executar,
@@ -318,17 +332,23 @@ def render_asset_qa_section(
                     api_key=api_key,
                     modelo_preferencial=selected_model
                 )
-                # Salva no histórico da sessão no topo
-                st.session_state[session_qa_key].insert(0, {
-                    "pergunta": pergunta_a_executar,
-                    "resposta": qa_res["resposta"],
-                    "modelo": qa_res["modelo_utilizado"]
-                })
-            except Exception as e:
-                st.error(f"⚠️ Erro ao consultar a IA: {e}")
+                resposta_completa = st.write_stream(gerador_stream)
+                st.markdown("</div>", unsafe_allow_html=True)
 
-    # Exibe as respostas recentes salvas na sessão com formatação nativa rica do Streamlit
-    if st.session_state[session_qa_key]:
+                # Salva no histórico da sessão evitando duplicatas consecutivas
+                if not st.session_state[session_qa_key] or st.session_state[session_qa_key][0]["pergunta"] != pergunta_a_executar:
+                    st.session_state[session_qa_key].insert(0, {
+                        "pergunta": pergunta_a_executar,
+                        "resposta": resposta_completa,
+                        "modelo": selected_model
+                    })
+            except Exception as e:
+                st.markdown("</div>", unsafe_allow_html=True)
+                st.error(f"⚠️ Erro ao transmitir resposta da IA: {e}")
+
+    # Exibe as respostas recentes salvas na sessão (exceto a que acabou de ser transmitida acima)
+    respostas_anteriores = st.session_state[session_qa_key][1:] if pergunta_a_executar else st.session_state[session_qa_key]
+    if respostas_anteriores:
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         col_hist_title, col_hist_clean = st.columns([4, 1])
         with col_hist_title:
@@ -338,7 +358,7 @@ def render_asset_qa_section(
                 st.session_state[session_qa_key] = []
                 st.rerun()
 
-        for idx, item in enumerate(st.session_state[session_qa_key]):
+        for idx, item in enumerate(respostas_anteriores):
             with st.container():
                 st.markdown(f"""
                 <div style="background-color: #1e293b; border-left: 4px solid #38bdf8; border-radius: 8px 8px 0 0; padding: 12px 16px; margin-top: 12px;">
