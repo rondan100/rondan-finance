@@ -242,7 +242,7 @@ def render_asset_qa_section(
 ):
     """
     Renderiza a barra de pesquisa e assistente interativo com IA sobre o ativo selecionado.
-    A IA responde utilizando o contexto técnico do gráfico, as últimas notícias e a tendência.
+    Dispara imediatamente tanto ao clicar nos botões de sugestão rápida quanto ao digitar na barra de pesquisa.
     """
     st.markdown("---")
     st.subheader(f"💬 Pergunte à IA sobre {ticker}")
@@ -255,86 +255,104 @@ def render_asset_qa_section(
         st.info("💡 Insira sua API Key do Gemini na barra lateral para habilitar o assistente conversacional.")
         return
 
-    # Histórico de perguntas na sessão
+    # Chaves de controle na sessão para persistir histórico e gatilho de pergunta
     session_qa_key = f"qa_history_{ticker}"
     if session_qa_key not in st.session_state:
         st.session_state[session_qa_key] = []
 
-    # Sugestões rápidas de perguntas
-    st.markdown("<span style='font-size: 0.85rem; color: #9ca3af;'>💡 Sugestões de perguntas rápidas:</span>", unsafe_allow_html=True)
+    # Variável para capturar a pergunta que deve ser executada nesta rodada
+    pergunta_a_executar = None
+
+    # Sugestões rápidas de perguntas (chips clicáveis que já executam a consulta diretamente)
+    st.markdown("<span style='font-size: 0.9rem; font-weight: 600; color: #9ca3af;'>⚡ Sugestões rápidas (clique para consultar imediatamente):</span>", unsafe_allow_html=True)
     col_s1, col_s2, col_s3, col_s4 = st.columns(4)
 
-    sugestao_escolhida = None
     with col_s1:
-        if st.button("📊 Comportamento das Médias", key="sug_1", use_container_width=True):
-            sugestao_escolhida = f"Como o cruzamento da MMA 9 e MMA 21 afeta a perspectiva de curto prazo de {ticker}?"
+        if st.button("📊 Comportamento das Médias", key=f"btn_sug_1_{ticker}", use_container_width=True):
+            pergunta_a_executar = f"Como o cruzamento da MMA 9 e MMA 21 afeta a perspectiva de curto prazo de {ticker}?"
+
     with col_s2:
-        if st.button("📰 Impacto das Notícias", key="sug_2", use_container_width=True):
-            sugestao_escolhida = f"Qual o impacto das notícias recentes no valuation e preço de {ticker}?"
+        if st.button("📰 Impacto das Notícias", key=f"btn_sug_2_{ticker}", use_container_width=True):
+            pergunta_a_executar = f"Qual o impacto das notícias recentes no valuation e preço de {ticker}?"
+
     with col_s3:
-        if st.button("💰 Dividendos & Preço", key="sug_3", use_container_width=True):
-            sugestao_escolhida = f"Vale a pena manter {ticker} na carteira visando dividendos e fluxo de caixa?"
+        if st.button("💰 Dividendos & Preço", key=f"btn_sug_3_{ticker}", use_container_width=True):
+            pergunta_a_executar = f"Vale a pena manter {ticker} na carteira visando dividendos e fluxo de caixa?"
+
     with col_s4:
-        if st.button("⚠️ Principais Riscos", key="sug_4", use_container_width=True):
-            sugestao_escolhida = f"Quais são os maiores riscos macroeconômicos e setoriais para {ticker} agora?"
+        if st.button("⚠️ Principais Riscos", key=f"btn_sug_4_{ticker}", use_container_width=True):
+            pergunta_a_executar = f"Quais são os maiores riscos macroeconômicos e setoriais para {ticker} agora?"
 
-    # Campo de busca e formulário
-    with st.form(key=f"form_qa_{ticker}"):
-        default_val = sugestao_escolhida if sugestao_escolhida else ""
-        user_question = st.text_input(
-            "Digite sua dúvida sobre o ativo:",
-            value=default_val,
-            placeholder=f"Ex: Vale a pena comprar {ticker} no preço atual de R$ {metrics['current_price']:.2f}? Qual o suporte mais importante?",
-            help="Pressione Enter ou clique em Consultar IA para obter o parecer contextualizado."
+    # Campo de texto para pergunta livre (fora de form restritivo para permitir submissão fluida)
+    col_input, col_submit = st.columns([4, 1])
+    with col_input:
+        texto_digitado = st.text_input(
+            "Digite sua dúvida personalizada sobre o ativo:",
+            placeholder=f"Ex: Vale a pena comprar {ticker} a R$ {metrics['current_price']:.2f}? Qual o suporte mais importante?",
+            key=f"input_qa_{ticker}",
+            label_visibility="collapsed"
         )
-        col_btn_submit, col_info_submit = st.columns([1, 3])
-        with col_btn_submit:
-            submit_question = st.form_submit_button("🔍 Consultar IA", type="primary", use_container_width=True)
-        with col_info_submit:
-            st.caption(f"Motor: `{selected_model}` • Contexto do gráfico e notícias ativo.")
+    with col_submit:
+        btn_enviar = st.button("🔍 Consultar IA", key=f"btn_submit_qa_{ticker}", type="primary", use_container_width=True)
 
-    if submit_question and user_question.strip():
+    if btn_enviar and texto_digitado.strip():
+        pergunta_a_executar = texto_digitado.strip()
+
+    # Executa a consulta se houver pergunta disparada (via chip ou campo de texto)
+    if pergunta_a_executar:
         from services.ai_service import consultar_ia_sobre_ativo
         from services.news_service import format_news_for_prompt
 
         titulos_noticias = format_news_for_prompt(news_items, max_titles=5)
         tendencia_str = current_analysis.get("tendencia", "Em análise") if current_analysis else "Não consultada"
 
-        with st.spinner(f"Consultando {selected_model} com contexto completo do ativo..."):
+        with st.spinner(f"Analisando '{pergunta_a_executar[:45]}...' com {selected_model}..."):
             try:
                 qa_res = consultar_ia_sobre_ativo(
                     ticker=ticker,
                     company_name=company_name,
-                    pergunta_usuario=user_question.strip(),
+                    pergunta_usuario=pergunta_a_executar,
                     dados_mercado_str=metrics.get("summary_line", ""),
                     titulos_noticias_str=titulos_noticias,
                     tendencia_atual_str=f"Tendência: {tendencia_str}",
                     api_key=api_key,
                     modelo_preferencial=selected_model
                 )
-                # Salva no histórico da sessão
+                # Salva no histórico da sessão no topo
                 st.session_state[session_qa_key].insert(0, {
-                    "pergunta": user_question.strip(),
+                    "pergunta": pergunta_a_executar,
                     "resposta": qa_res["resposta"],
                     "modelo": qa_res["modelo_utilizado"]
                 })
             except Exception as e:
-                st.error(f"Erro ao responder: {e}")
+                st.error(f"⚠️ Erro ao consultar a IA: {e}")
 
-    # Exibe as respostas recentes
+    # Exibe as respostas recentes salvas na sessão com formatação nativa rica do Streamlit
     if st.session_state[session_qa_key]:
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        col_hist_title, col_hist_clean = st.columns([4, 1])
+        with col_hist_title:
+            st.markdown("#### 📋 Respostas da IA para este ativo:")
+        with col_hist_clean:
+            if st.button("🗑️ Limpar Conversa", key=f"clean_qa_{ticker}", use_container_width=True):
+                st.session_state[session_qa_key] = []
+                st.rerun()
+
         for idx, item in enumerate(st.session_state[session_qa_key]):
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #334155; border-radius: 10px; padding: 20px; margin-top: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">
-                    <span style="font-weight: 700; color: #38bdf8; font-size: 1.05rem;">❓ {item['pergunta']}</span>
-                    <span style="background-color: #2563eb33; color: #60a5fa; border: 1px solid #2563eb; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 9999px;">IA: {item['modelo']}</span>
+            with st.container():
+                st.markdown(f"""
+                <div style="background-color: #1e293b; border-left: 4px solid #38bdf8; border-radius: 8px 8px 0 0; padding: 12px 16px; margin-top: 12px;">
+                    <span style="font-weight: 700; color: #ffffff; font-size: 1.05rem;">❓ {item['pergunta']}</span>
+                    <span style="float: right; background-color: #2563eb33; color: #60a5fa; border: 1px solid #2563eb; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 9999px;">IA: {item['modelo']}</span>
                 </div>
-                <div style="font-size: 0.98rem; line-height: 1.65; color: #e2e8f0;">
-                    {item['resposta']}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+                
+                # Renderiza o conteúdo da resposta com Markdown puro do Streamlit (garante formatação perfeita)
+                st.markdown(f"""
+                <div style="background-color: #0f172a; border: 1px solid #334155; border-top: none; border-radius: 0 0 8px 8px; padding: 18px 20px; margin-bottom: 16px;">
+                """, unsafe_allow_html=True)
+                st.markdown(item['resposta'])
+                st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_footer():

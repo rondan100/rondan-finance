@@ -250,32 +250,33 @@ DIRETRIZES DA RESPOSTA:
 4. Use formatação limpa em tópicos com negritos para facilitar a leitura.
 """
 
-    config_args = {
-        "temperature": 0.4,
-        "max_output_tokens": 900,
-    }
-
-    MODELOS_COM_THINKING = {"gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.8-pro"}
-    if modelo in MODELOS_COM_THINKING and hasattr(types, "ThinkingConfig"):
-        try:
-            config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-        except Exception:
-            pass
-
-    fast_config = types.GenerateContentConfig(**config_args)
-
     modelos_tentativa = [modelo] + [m for m in GEMINI_MODELS if m != modelo]
     ultimo_erro = None
+    MODELOS_COM_THINKING = {"gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.8-pro"}
 
     for m_atual in modelos_tentativa:
+        config_args = {
+            "temperature": 0.4,
+            "max_output_tokens": 1000,
+        }
+        # Adiciona thinking_config SOMENTE nos modelos que comprovadamente suportam
+        if m_atual in MODELOS_COM_THINKING and hasattr(types, "ThinkingConfig"):
+            try:
+                config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                pass
+
+        model_config = types.GenerateContentConfig(**config_args)
+
         try:
             resp = client.models.generate_content(
                 model=m_atual,
                 contents=prompt,
-                config=fast_config
+                config=model_config
             )
+            raw_text = resp.text.strip() if resp.text else "Não foi possível gerar uma resposta detalhada."
             return {
-                "resposta": resp.text.strip(),
+                "resposta": raw_text,
                 "modelo_utilizado": m_atual
             }
         except Exception as e:

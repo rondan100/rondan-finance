@@ -78,7 +78,8 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 
 | Versão | Data | Status | Tipo | Destaques Principais |
 | :---: | :---: | :---: | :---: | :--- |
-| **`v1.4.0`** | `Nov/2026` | 🟢 **Atual** | `MINOR` | Suporte ao Google AI Pro (modelos Pro e `argon`), barra de pesquisa/chat com IA contextualizada com gráfico e notícias |
+| **`v1.4.1`** | `Nov/2026` | 🟢 **Atual** | `PATCH` | Correção do disparo de sugestões na barra de pesquisa, renderização nativa em Markdown e botão de limpar conversa |
+| **`v1.4.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Suporte ao Google AI Pro (modelos Pro e `argon`), barra de pesquisa/chat com IA contextualizada com gráfico e notícias |
 | **`v1.3.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Radar B3 (Scanner de oportunidades/compra), Cotação de hoje no Candlestick e correção de candles zerados |
 | **`v1.2.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Integração Gemini 3.5 Flash Lite (500 req/dia), cotas dinâmicas e Enum de ativos B3 |
 | **`v1.1.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Disparo de IA sob demanda por botão, cache de 30min e otimização drástica de tokens |
@@ -87,7 +88,13 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 <details open>
 <summary><b>🔍 Detalhes das Alterações por Versão</b></summary>
 
-### [`v1.4.0`] — Atual
+### [`v1.4.1`] — Atual
+- **Corrigido:** Disparo e execução direta da IA ao clicar nos botões de sugestões rápidas (removido bloqueio do formulário `st.form`).
+- **Corrigido:** Renderização em Markdown puro nativo (`st.markdown`) para evitar que quebras de linha e formatações da IA fossem engolidas por tags HTML.
+- **Corrigido:** Montagem dinâmica de `GenerateContentConfig` por modelo, prevenindo erro `400 INVALID_ARGUMENT` em modelos Pro/Argon que não aceitam `thinking_config`.
+- **Adicionado:** Botão "🗑️ Limpar Conversa" para resetar o histórico de perguntas do ativo na sessão.
+
+### [`v1.4.0`]
 - **Adicionado:** Suporte oficial a assinaturas **Google AI Pro** e modelos analíticos avançados: `gemini-1.5-pro`, `gemini-3.8-pro`, `argon` (experimental) e opção de digitar modelos customizados.
 - **Adicionado:** Descoberta dinâmica de modelos habilitados na conta do usuário via `client.models.list()`.
 - **Adicionado:** **Assistente Interativo de Consulta com IA**: Barra de pesquisa/chat onde o investidor faz perguntas diretas sobre o ativo selecionado. O modelo recebe automaticamente o contexto técnico do gráfico (preço, MMA 9/21, extremos), as últimas notícias do Google News e o diagnóstico de tendência.
