@@ -104,7 +104,7 @@ B3_ASSET_NAMES = {
     # Ativos principais e atualizados
     "PETR4": "Petrobras",
     "PETR3": "Petrobras",
-    "VALE3": "Vale",
+    "VALE3": "Vale mineradora",
     "ITUB4": "Itaú Unibanco",
     "BBDC4": "Bradesco",
     "BBAS3": "Banco do Brasil",

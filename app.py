@@ -71,6 +71,7 @@ with st.sidebar:
         user_ticker = selected_enum_val.split(" - ")[0].strip()
 
     ticker_normalized = normalize_ticker(user_ticker)
+    asset_display_name = selected_enum_val  # Mantém "PETR4.SA - Petrobras (PN)"
     
     # Seletor de período do gráfico (1m, 3m, 6m, 1y)
     period_selected = st.selectbox(
@@ -122,7 +123,7 @@ with st.sidebar:
 
 # Cabeçalho
 st.title("📊 Dashboard Financeiro B3 & Análise com IA")
-st.markdown(f"Análise técnica quantitativa e qualitativa em tempo real para **{ticker_normalized}**.")
+st.markdown(f"Análise técnica quantitativa e qualitativa em tempo real para **{asset_display_name}**.")
 
 # 1. Coleta de dados via yfinance
 with st.spinner(f"Coletando cotações para {ticker_normalized}..."):
