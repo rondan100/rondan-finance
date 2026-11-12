@@ -90,6 +90,7 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 
 ### [`v1.4.1`] — Atual
 - **Adicionado:** **Streaming em Tempo Real (token a token)** via `st.write_stream`: a resposta começa a aparecer na tela em ~300ms com efeito de digitação ao vivo, eliminando telas travadas ou spinners demorados.
+- **Adicionado:** Suporte à **varredura completa de todos os 44 ativos da B3** cadastrados em `config.py` com seletor de abrangência (*Todos os 44 Ativos* ou *Top 20 Mais Líquidos*).
 - **Otimizado:** Prompt cirúrgico e redução de `max_output_tokens` para 220 tokens (~80 palavras diretas), acelerando o término da resposta em até 5x.
 - **Corrigido:** Disparo e execução direta da IA ao clicar nos botões de sugestões rápidas (removido bloqueio do formulário `st.form`).
 - **Corrigido:** Renderização em Markdown puro nativo (`st.markdown`) para evitar que quebras de linha e formatações da IA fossem engolidas por tags HTML.

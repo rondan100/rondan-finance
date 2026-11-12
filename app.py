@@ -174,15 +174,26 @@ with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra / Fic
         "estão em **forte tendência de alta / sinal de compra** (Preço > MMA 9 > MMA 21) ou em zonas de "
         "**reversão/rompimento altista** para acompanhar de perto."
     )
-    col_scan_btn, col_scan_info = st.columns([1, 2])
+    col_escopo, col_scan_btn, col_scan_info = st.columns([2, 1, 2])
+    with col_escopo:
+        escopo_escolhido = st.radio(
+            "Abrangência do Escaneamento:",
+            options=["Todos os 44 Ativos da Lista B3", "Top 20 Mais Líquidos"],
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+    scan_all_flag = "Todos" in escopo_escolhido
+
     with col_scan_btn:
-        btn_scan_radar = st.button("🔍 Escanear Mercado B3 Agora", type="secondary", use_container_width=True)
+        btn_scan_radar = st.button("🔍 Escanear Mercado", type="secondary", use_container_width=True)
+
     with col_scan_info:
-        st.caption("⚡ Análise técnica quantitativa baseada em médias móveis (MMA 9 e 21), variações e momentum dos ativos populares.")
+        qtd_label = "44 ações populares" if scan_all_flag else "Top 20 ações"
+        st.caption(f"⚡ Análise quantitativa de médias móveis (MMA 9/21) e momentum em **{qtd_label}**.")
 
     if btn_scan_radar:
-        with st.spinner("Escaneando e ranqueando oportunidades nos principais ativos da B3..."):
-            st.session_state["b3_scan_results"] = scan_b3_market_opportunities()
+        with st.spinner(f"Escaneando e ranqueando oportunidades em {qtd_label}..."):
+            st.session_state["b3_scan_results"] = scan_b3_market_opportunities(scan_all=scan_all_flag)
 
     if "b3_scan_results" in st.session_state and st.session_state["b3_scan_results"]:
         render_scanner_results(st.session_state["b3_scan_results"])

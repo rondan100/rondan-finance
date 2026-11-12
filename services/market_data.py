@@ -130,10 +130,11 @@ def calculate_market_metrics(hist: pd.DataFrame) -> dict:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def scan_b3_market_opportunities(asset_list: list = None) -> list[dict]:
+def scan_b3_market_opportunities(asset_list: list = None, scan_all: bool = True) -> list[dict]:
     """
-    Escaneia os ativos mais populares da B3 identificando aqueles com tendência de alta,
+    Escaneia os ativos populares da B3 identificando aqueles com tendência de alta,
     sinais técnicos de compra ou que estão em zonas interessantes para 'ficar de olho'.
+    Por padrão escaneia a lista completa de ativos cadastrados em config.py (44 ativos).
     Cache de 15 minutos (900s) para garantir agilidade e performance.
     """
     from config import PopularB3Asset
@@ -145,8 +146,8 @@ def scan_b3_market_opportunities(asset_list: list = None) -> list[dict]:
             for asset in PopularB3Asset
             if asset != PopularB3Asset.OUTRO
         ]
-        # Pega as 16 principais para um escaneamento rápido e equilibrado
-        asset_list = raw_list[:16]
+        # Escaneia todos os 44 ativos ou o Top 20 conforme preferência
+        asset_list = raw_list if scan_all else raw_list[:20]
 
     results = []
 
