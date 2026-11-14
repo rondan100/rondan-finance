@@ -90,14 +90,15 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 <summary><b>🔍 Detalhes das Alterações por Versão</b></summary>
 
 ### [`v1.5.0`] — Atual
-- **Adicionado:** **Análise Quantitativa CAN SLM (adaptada para a B3)** em `services/market_data.py`:
+- **Adicionado:** **Análise Quantitativa CAN SLM com Duplo Perfil de Rigor (`Calibrado B3` vs `Estrito Livro O'Neil`)** em `services/market_data.py`:
   - **M (Market Direction — Peso Principal via `^BVSP` `2y`):** Calcula **MM50** e **MM200** sobre 2 anos do Ibovespa (`fetch_ibov_data()` cacheado por 1h) e classifica o regime em `ALTA` (`^BVSP > MM50 e MM200`), `ATENCAO` (entre `MM50` e `MM200`) ou `BAIXA` (`^BVSP < MM50 e MM200`), exibido em banner de destaque no topo do card.
-  - **C (Current Earnings):** Crescimento trimestral do lucro/LPA YoY $> 20\%$ (`earningsQuarterlyGrowth` ou coluna `0` vs `4` de `quarterly_income_stmt`).
-  - **A (Annual Earnings):** **CAGR Anual** $> 25\%$ nos últimos 3–4 exercícios (`income_stmt`) combinado com **ROE** $\ge 17\%$ (`returnOnEquity`), com tratamento seguro contra prejuízos na base.
-  - **N (New High):** Proximidade de até 15% da máxima de 52 semanas (`preco_atual / fiftyTwoWeekHigh >= 0.85`).
-  - **S (Supply & Demand):** Volume relativo $\ge 1.2\times$ a média de 20 pregões com variação positiva de preço.
-  - **L (Leader or Laggard):** Força relativa comparada ao Ibovespa recortado para a mesma janela temporal do gráfico selecionado (`hist_data.index[0]`).
-- **Adicionado:** Componente visual responsivo `render_canslim_card` em `ui/components.py` com banner do Regime de Mercado (**M**) no topo, placar dos 5 critérios da ação (**C-A-N-S-L**) e detalhamento expansível (`✅`, `⚠️`, `➖ N/D`).
+  - **C (Current Earnings):** Crescimento trimestral do lucro/LPA YoY $> 12\%$ no modo **Calibrado B3** ou $> 20\%$ no modo **Estrito O'Neil**.
+  - **A (Annual Earnings):** No modo **Estrito O'Neil**, exige `CAGR Anual > 25%` E `ROE >= 17%`; no modo **Calibrado B3**, aprova com `(CAGR > 15% e ROE >= 14%)` OU `(ROE >= 17% e CAGR > 5%)`.
+  - **N (New High):** Proximidade da máxima de 52 semanas (`>= 0.80` / até 20% abaixo do topo no **Calibrado B3**, ou `>= 0.85` / até 15% no **Estrito O'Neil**).
+  - **S (Supply & Demand — Janela de 5 pregões):** Analisa os últimos 5 pregões e aprova se houver pelo menos 1 pregão de alta (`Close > Open` ou `Close > PrevClose`) com `Volume >= 1.25x` a média móvel de volume de 20 dias (`Pico Vol 5d`).
+  - **L (Leader or Laggard — Janela fixa de 63 pregões / 3M):** Compara a variação percentual do ativo contra o `^BVSP` nos últimos 63 pregões (~3 meses), invariante ao período selecionado no gráfico.
+- **Adicionado:** Seletor rápido `Perfil de Rigor CAN SLM` (`Calibrado B3` / `Estrito Livro (O'Neil)`) e componente visual responsivo `render_canslim_card` em `ui/components.py` com banner do Regime de Mercado (**M**) no topo, placar dos 5 critérios da ação (**C-A-N-S-L**) e detalhamento expansível (`✅`, `⚠️`, `➖ N/D`).
+- **Adicionado:** Integração do **Score Quantitativo CAN SLM (`C-A-N-S-L`) no Radar B3** (`scan_b3_market_opportunities` em paralelo via `ThreadPoolExecutor` e `render_scanner_results`), adicionando a aba `🏆 Top Score CAN SLM`, pílulas visuais de critérios por ativo e ranqueamento híbrido (Técnico + CAN SLM).
 - **Otimizado:** Injeção compacta da `summary_line` do CAN SLM dentro de `metrics["summary_line"]` para enriquecer o diagnóstico do Gemini com impacto mínimo de tokens.
 
 ### [`v1.4.1`]

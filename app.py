@@ -176,11 +176,25 @@ with st.spinner(f"Extraindo notícias recentes sobre {company_name}..."):
 # 3. Métricas Técnicas no Topo e Checklist Quantitativo CAN SLM
 metrics = calculate_market_metrics(hist_data)
 ibov_data = fetch_ibov_data()
-canslim_data = calculate_canslim_metrics(hist_data, ticker_info, ibov_data)
+
+render_top_metrics(metrics, ticker_normalized, period_selected)
+
+modo_canslim = st.radio(
+    "Perfil de Rigor CAN SLM:",
+    ["Calibrado B3", "Estrito Livro (O'Neil)"],
+    horizontal=True
+)
+strict_mode_canslim = (modo_canslim == "Estrito Livro (O'Neil)")
+
+canslim_data = calculate_canslim_metrics(
+    hist_data,
+    ticker_info,
+    ibov_data,
+    strict_mode=strict_mode_canslim
+)
 if canslim_data and canslim_data.get("summary_line"):
     metrics["summary_line"] = f"{metrics['summary_line']} || {canslim_data['summary_line']}"
 
-render_top_metrics(metrics, ticker_normalized, period_selected)
 render_canslim_card(canslim_data)
 
 st.markdown("---")
@@ -191,11 +205,11 @@ st.markdown("---")
 if "radar_expander_open" not in st.session_state:
     st.session_state["radar_expander_open"] = False
 
-with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra / Ficar de Olho", expanded=st.session_state["radar_expander_open"]):
+with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra & Score CAN SLM", expanded=st.session_state["radar_expander_open"]):
     st.markdown(
         "Identifique automaticamente quais das ações mais negociadas da Bolsa Brasileira (**B3**) "
-        "estão em **forte tendência de alta / sinal de compra** (Preço > MMA 9 > MMA 21) ou em zonas de "
-        "**reversão/rompimento altista** para acompanhar de perto."
+        "combinam **tendência técnica de alta** (Preço > MMA 9 > MMA 21) com forte **Score Quantitativo CAN SLM** "
+        f"(modo atual: **{modo_canslim}**)."
     )
     col_escopo, col_scan_btn, col_scan_info = st.columns([2, 1, 2])
     with col_escopo:
@@ -212,12 +226,26 @@ with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra / Fic
 
     with col_scan_info:
         qtd_label = "44 ações populares" if scan_all_flag else "Top 20 ações"
-        st.caption(f"⚡ Análise quantitativa de médias móveis (MMA 9/21) e momentum em **{qtd_label}**.")
+        st.caption(f"⚡ Varredura paralela combinando Médias Móveis (MMA 9/21) + **Score CAN SLM ({modo_canslim})** em **{qtd_label}**.")
 
     if btn_scan_radar:
         st.session_state["radar_expander_open"] = True
-        with st.spinner(f"Escaneando e ranqueando oportunidades em {qtd_label}..."):
-            st.session_state["b3_scan_results"] = scan_b3_market_opportunities(scan_all=scan_all_flag)
+        st.session_state["b3_scan_active"] = True
+        with st.spinner(f"Escaneando e ranqueando oportunidades em {qtd_label} ({modo_canslim})..."):
+            st.session_state["b3_scan_results"] = scan_b3_market_opportunities(
+                scan_all=scan_all_flag,
+                strict_mode=strict_mode_canslim
+            )
+            st.session_state["b3_scan_last_params"] = (scan_all_flag, strict_mode_canslim)
+
+    # Atualiza instantaneamente o Radar B3 se o usuário trocar o Perfil de Rigor CAN SLM ou a Abrangência
+    if st.session_state.get("b3_scan_active") and st.session_state.get("b3_scan_last_params") != (scan_all_flag, strict_mode_canslim):
+        with st.spinner(f"Recalculando Radar B3 para o modo {modo_canslim}..."):
+            st.session_state["b3_scan_results"] = scan_b3_market_opportunities(
+                scan_all=scan_all_flag,
+                strict_mode=strict_mode_canslim
+            )
+            st.session_state["b3_scan_last_params"] = (scan_all_flag, strict_mode_canslim)
 
     if "b3_scan_results" in st.session_state and st.session_state["b3_scan_results"]:
         render_scanner_results(st.session_state["b3_scan_results"])

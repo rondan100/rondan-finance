@@ -83,6 +83,8 @@ def render_canslim_card(canslim_data: dict):
 
     # 2. Placar dos 5 Critérios Específicos da Ação (C, A, N, S, L)
     details = canslim_data.get("criteria_details", [])
+    strict_mode = canslim_data.get("strict_mode", False)
+    mode_label = canslim_data.get("mode_label", "Estrito O'Neil" if strict_mode else "Calibrado B3")
     stock_details = [item for item in details if item.get("letter") in ("C", "A", "N", "S", "L")]
     stock_score = canslim_data.get("stock_score", sum(1 for i in stock_details if i.get("status") == "approved"))
     stock_valid = canslim_data.get(
@@ -139,6 +141,10 @@ def render_canslim_card(canslim_data: dict):
                              padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;">
                     {status_label}
                 </span>
+                <span style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4);
+                             padding: 2px 9px; border-radius: 999px; font-size: 0.76rem; font-weight: 600;">
+                    ⚙️ {mode_label}
+                </span>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                 {pills_html}
@@ -147,7 +153,21 @@ def render_canslim_card(canslim_data: dict):
     </div>
     """, unsafe_allow_html=True)
 
-    with st.expander("Ver detalhes dos critérios CAN SLM (Metas & Indicadores)", expanded=False):
+    with st.expander(f"Ver detalhes dos critérios CAN SLM — Modo: {mode_label} (Metas & Indicadores)", expanded=False):
+        if strict_mode:
+            st.caption(
+                "📘 **Modo Estrito Livro (O'Neil) Ativo:** "
+                "**C** (LPA Trim. YoY > 20%) • **A** (CAGR Anual > 25% E ROE ≥ 17%) • "
+                "**N** (Até 15% abaixo da Máx. 52s) • **S** (Pico Vol 5d ≥ 1.25x MM20 em dia de alta) • "
+                "**L** (Retorno 63 pregões / 3M > IBOV)."
+            )
+        else:
+            st.caption(
+                "🇧🇷 **Modo Calibrado B3 Ativo:** "
+                "**C** (LPA Trim. YoY > 12%) • **A** ((CAGR > 15% e ROE ≥ 14%) ou (ROE ≥ 17% e CAGR > 5%)) • "
+                "**N** (Até 20% abaixo da Máx. 52s) • **S** (Pico Vol 5d ≥ 1.25x MM20 em dia de alta) • "
+                "**L** (Retorno 63 pregões / 3M > IBOV)."
+            )
         cols = st.columns(2)
         for idx, item in enumerate(details):
             st_code = item.get("status", "na")
@@ -301,29 +321,54 @@ def render_news_expander(news_items: list, company_name: str):
 
 def render_scanner_results(opportunities: list):
     """
-    Renderiza o painel do Scanner de Oportunidades da B3 com destaques para ações
-    em tendência de compra ou que estão em zonas estratégicas para ficar de olho.
+    Renderiza o painel do Scanner de Oportunidades da B3 combinando tendência técnica
+    (MMA 9/21) e o Score Quantitativo CAN SLM (C-A-N-S-L) de cada ativo conforme o
+    Perfil de Rigor selecionado ('Calibrado B3' ou 'Estrito Livro O'Neil').
     """
     if not opportunities:
         st.warning("Nenhum dado retornado no escaneamento. Tente novamente em instantes.")
         return
 
-    # Contadores de categoria
+    first_op = opportunities[0]
+    strict_mode = first_op.get("strict_mode", False)
+    mode_label = first_op.get("mode_label", "Estrito O'Neil" if strict_mode else "Calibrado B3")
+
+    if strict_mode:
+        st.caption(
+            "📘 **Perfil de Rigor no Radar: Estrito Livro (O'Neil)** — "
+            "**C** (LPA YoY > 20%) • **A** (CAGR > 25% E ROE ≥ 17%) • "
+            "**N** (Topo 52s ≤ 15%) • **S** (Pico Vol 5d ≥ 1.25x MM20 + Alta) • **L** (Força Relativa 3M > IBOV)"
+        )
+    else:
+        st.caption(
+            "🇧🇷 **Perfil de Rigor no Radar: Calibrado B3** — "
+            "**C** (LPA YoY > 12%) • **A** ((CAGR > 15% e ROE ≥ 14%) ou (ROE ≥ 17% e CAGR > 5%)) • "
+            "**N** (Topo 52s ≤ 20%) • **S** (Pico Vol 5d ≥ 1.25x MM20 + Alta) • **L** (Força Relativa 3M > IBOV)"
+        )
+
+    # Contadores de categoria e líderes CAN SLM
     compras = [op for op in opportunities if op["categoria"] == "COMPRA"]
     olho = [op for op in opportunities if op["categoria"] == "OLHO"]
-    outros = [op for op in opportunities if op["categoria"] not in ("COMPRA", "OLHO")]
+    top_canslim = sorted(
+        [op for op in opportunities if op.get("canslim_score", 0) >= 3 or op.get("canslim_ratio", 0) >= 0.60],
+        key=lambda x: (x.get("canslim_score", 0), x.get("canslim_ratio", 0), x.get("score", 0)),
+        reverse=True
+    )
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.metric("🚀 Tendência de Compra Forte", f"{len(compras)} ativos", "Sinal Altista")
+        st.metric("🚀 Tendência de Compra", f"{len(compras)} ativos", f"MMA 9/21 + {mode_label}")
     with c2:
-        st.metric("👀 Para Ficar de Olho", f"{len(olho)} ativos", "Reversão / Rompimento")
+        st.metric(f"🏆 Líderes CAN SLM (≥ 3)", f"{len(top_canslim)} ativos", f"Modo: {mode_label}")
     with c3:
-        st.metric("📊 Total Escaneado", f"{len(opportunities)} ativos", "B3 Top Líquidas")
+        st.metric("👀 Para Ficar de Olho", f"{len(olho)} ativos", "Reversão / Pullback")
+    with c4:
+        st.metric("📊 Total Escaneado", f"{len(opportunities)} ativos", "B3 Liquidez")
 
     # Abas de navegação rápida
-    tab_compras, tab_olho, tab_todas = st.tabs([
+    tab_compras, tab_canslim, tab_olho, tab_todas = st.tabs([
         f"🟢 Tendência de Compra ({len(compras)})",
+        f"🏆 Top Score CAN SLM ({len(top_canslim)})",
         f"🟡 Interessante Ficar de Olho ({len(olho)})",
         f"📋 Todos os Ativos ({len(opportunities)})"
     ])
@@ -340,16 +385,42 @@ def render_scanner_results(opportunities: list):
             delta_5d_cor = "#10b981" if op['var5d'] >= 0 else "#ef4444"
             badge_cor = "#10b981" if "Compra" in op['sinal'] else ("#f59e0b" if "Olho" in op['sinal'] else "#6b7280")
 
+            # Dados do Score Quantitativo CAN SLM (C-A-N-S-L)
+            cs_score = op.get("canslim_score", 0)
+            cs_valid = op.get("canslim_valid", 5)
+            cs_ratio = op.get("canslim_ratio", 0.0)
+            cs_details = op.get("canslim_details", [])
+
+            if cs_valid > 0 and cs_ratio >= 0.60:
+                cs_cor = "#10b981"
+            elif cs_valid > 0 and cs_ratio >= 0.40:
+                cs_cor = "#f59e0b"
+            else:
+                cs_cor = "#9ca3af"
+
+            # Mini pílulas C-A-N-S-L para o card do Radar
+            cs_pills = ""
+            for item in cs_details:
+                st_code = item.get("status", "na")
+                letter = item.get("letter", "")
+                ic = "✅" if st_code == "approved" else ("⚠️" if st_code == "rejected" else "➖")
+                cs_pills += (
+                    f'<span style="font-size:0.75rem;background:rgba(255,255,255,0.05);'
+                    f'border:1px solid #374151;border-radius:4px;padding:1px 5px;margin-right:4px;color:#e5e7eb;">'
+                    f'{ic}{letter}</span>'
+                )
+
             col_card_info, col_card_btn = st.columns([5, 1.2])
 
             with col_card_info:
                 st.markdown(f"""
                 <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 4px solid {badge_cor}; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                        <div>
+                        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px;">
                             <span style="font-size: 1.15rem; font-weight: 700; color: #ffffff;">{op['ticker']}</span>
-                            <span style="font-size: 0.95rem; color: #9ca3af; margin-left: 8px;">({op['company']})</span>
-                            <span style="background-color: {badge_cor}22; color: {badge_cor}; border: 1px solid {badge_cor}; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-left: 10px;">{op['sinal']}</span>
+                            <span style="font-size: 0.92rem; color: #9ca3af;">({op['company']})</span>
+                            <span style="background-color: {badge_cor}22; color: {badge_cor}; border: 1px solid {badge_cor}; font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">{op['sinal']}</span>
+                            <span style="background-color: {cs_cor}22; color: {cs_cor}; border: 1px solid {cs_cor}; font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px;">📊 CAN SLM ({op.get('mode_label', mode_label)}): {cs_score}/{cs_valid}</span>
                         </div>
                         <div style="text-align: right;">
                             <span style="font-size: 1.15rem; font-weight: 700; color: #f3f4f6;">R$ {op['price']:.2f}</span>
@@ -357,8 +428,13 @@ def render_scanner_results(opportunities: list):
                             <span style="font-size: 0.9rem; font-weight: 600; color: {delta_5d_cor}; margin-left: 10px;">5D: {op['var5d']:+.2f}%</span>
                         </div>
                     </div>
-                    <div style="font-size: 0.88rem; color: #d1d5db; margin-top: 6px;">
-                        💡 <b>Racional Técnico:</b> {op['motivo']} &nbsp;|&nbsp; <span style="color: #9ca3af;">MMA9: R$ {op['sma9']:.2f} • MMA21: R$ {op['sma21']:.2f}</span>
+                    <div style="font-size: 0.86rem; color: #d1d5db; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            💡 <b>Racional:</b> {op['motivo']} &nbsp;|&nbsp; <span style="color: #9ca3af;">MMA9: R$ {op['sma9']:.2f} • MMA21: R$ {op['sma21']:.2f}</span>
+                        </div>
+                        <div>
+                            {cs_pills}
+                        </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -391,6 +467,9 @@ def render_scanner_results(opportunities: list):
 
     with tab_compras:
         _render_cards(compras, tab_key="compras")
+
+    with tab_canslim:
+        _render_cards(top_canslim, tab_key="canslim")
 
     with tab_olho:
         _render_cards(olho, tab_key="olho")
