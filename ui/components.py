@@ -47,21 +47,55 @@ def render_top_metrics(metrics: dict, ticker: str, period: str):
 def render_canslim_card(canslim_data: dict):
     """
     Renderiza o card e checklist quantitativo CAN SLM adaptado para a B3,
-    com layout limpo e responsivo para desktop e celular.
+    destacando o Regime de Mercado (M - Ibovespa MM50/MM200) no topo e,
+    logo abaixo, o placar dos 5 critérios da ação (C, A, N, S, L).
     """
     if not canslim_data:
         return
 
-    score = canslim_data.get("score", 0)
-    valid_criteria = canslim_data.get("valid_criteria", 6)
-    details = canslim_data.get("criteria_details", [])
+    market_regime = canslim_data.get("market_regime", {}) or {}
+    regime_status = market_regime.get("status", "ND")
+    ibov_close = market_regime.get("ibov_close")
+    mm50 = market_regime.get("mm50")
+    mm200 = market_regime.get("mm200")
 
-    # Define cor de destaque conforme pontuação
-    if valid_criteria > 0 and (score / valid_criteria) >= 0.65:
+    # 1. Banner de Destaque do Critério M (Direção do Mercado — Peso Principal)
+    if regime_status == "ALTA" and ibov_close is not None:
+        st.success(
+            f"🟢 **M — Direção do Mercado (IBOV em ALTA):** Fechamento aos **{ibov_close:,.0f} pts**, "
+            f"operando acima da **MM50 ({mm50:,.0f})** e da **MM200 ({mm200:,.0f})**. "
+            f"*Cenário favorável para compras (o mercado determina se você ganha ou perde).*"
+        )
+    elif regime_status == "ATENCAO" and ibov_close is not None:
+        st.warning(
+            f"🟡 **M — Direção do Mercado (IBOV em ZONA DE CAUTELA):** Fechamento aos **{ibov_close:,.0f} pts**, "
+            f"oscilando entre a **MM50 ({mm50:,.0f})** e a **MM200 ({mm200:,.0f})**. "
+            f"*Mercado em transição — exige seletividade redobrada.*"
+        )
+    elif regime_status == "BAIXA" and ibov_close is not None:
+        st.error(
+            f"🔴 **M — Direção do Mercado (IBOV em TENDÊNCIA DE BAIXA):** Fechamento aos **{ibov_close:,.0f} pts**, "
+            f"abaixo da **MM50 ({mm50:,.0f})** e da **MM200 ({mm200:,.0f})**. "
+            f"*Risco elevado mesmo para ações fortes — evite ir contra a maré do mercado.*"
+        )
+    else:
+        st.info("ℹ️ **M — Direção do Mercado (IBOV):** Dados históricos de 2 anos do `^BVSP` indisponíveis no momento.")
+
+    # 2. Placar dos 5 Critérios Específicos da Ação (C, A, N, S, L)
+    details = canslim_data.get("criteria_details", [])
+    stock_details = [item for item in details if item.get("letter") in ("C", "A", "N", "S", "L")]
+    stock_score = canslim_data.get("stock_score", sum(1 for i in stock_details if i.get("status") == "approved"))
+    stock_valid = canslim_data.get(
+        "stock_valid_criteria",
+        sum(1 for i in stock_details if i.get("status") in ("approved", "rejected"))
+    )
+
+    # Define cor de destaque conforme pontuação da ação (C-A-N-S-L)
+    if stock_valid > 0 and (stock_score / stock_valid) >= 0.65:
         border_color = "#10b981"
         badge_bg = "rgba(16, 185, 129, 0.18)"
         status_label = "Forte Alinhamento"
-    elif valid_criteria > 0 and (score / valid_criteria) >= 0.40:
+    elif stock_valid > 0 and (stock_score / stock_valid) >= 0.40:
         border_color = "#f59e0b"
         badge_bg = "rgba(245, 158, 11, 0.18)"
         status_label = "Alinhamento Moderado"
@@ -70,9 +104,9 @@ def render_canslim_card(canslim_data: dict):
         badge_bg = "rgba(239, 68, 68, 0.18)"
         status_label = "Baixo Alinhamento"
 
-    # Gera pílulas rápidas das 6 letras para visualização imediata no topo
+    # Gera pílulas rápidas das 5 letras da ação (C, A, N, S, L) + M
     pills_html = ""
-    for item in details:
+    for item in stock_details:
         st_code = item.get("status", "na")
         letter = item.get("letter", "")
         if st_code == "approved":
@@ -95,11 +129,11 @@ def render_canslim_card(canslim_data: dict):
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(31, 41, 55, 0.7) 100%);
                 border: 1px solid #374151; border-left: 5px solid {border_color};
-                border-radius: 10px; padding: 14px 18px; margin: 12px 0 10px 0;">
+                border-radius: 10px; padding: 14px 18px; margin: 6px 0 10px 0;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
-                <span style="font-size: 1.08rem; font-weight: 700; color: #ffffff;">
-                    📊 Checklist Quantitativo CAN SLM: {score}/{valid_criteria} critérios atendidos
+                <span style="font-size: 1.05rem; font-weight: 700; color: #ffffff;">
+                    📊 Score Quantitativo do Ativo (C-A-N-S-L): {stock_score}/{stock_valid} critérios atendidos
                 </span>
                 <span style="background: {badge_bg}; color: {border_color}; border: 1px solid {border_color};
                              padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;">
@@ -113,7 +147,7 @@ def render_canslim_card(canslim_data: dict):
     </div>
     """, unsafe_allow_html=True)
 
-    with st.expander("Ver detalhes dos critérios CAN SLM", expanded=False):
+    with st.expander("Ver detalhes dos critérios CAN SLM (Metas & Indicadores)", expanded=False):
         cols = st.columns(2)
         for idx, item in enumerate(details):
             st_code = item.get("status", "na")

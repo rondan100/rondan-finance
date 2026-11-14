@@ -82,36 +82,66 @@ def fetch_stock_data(symbol: str, period: str):
     except Exception:
         info = {}
 
-    # Fallback seguro para crescimento trimestral de lucro via quarterly_income_stmt se ausente no info
-    if info.get("earningsQuarterlyGrowth") is None:
-        try:
-            q_stmt = ticker_obj.quarterly_income_stmt
-            if q_stmt is not None and not q_stmt.empty:
-                for row_label in ["Net Income", "Net Income Common Stockholders", "Operating Income"]:
-                    if row_label in q_stmt.index:
-                        series = q_stmt.loc[row_label].dropna()
-                        if len(series) >= 2:
-                            recent_val = float(series.iloc[0])
-                            prev_val = float(series.iloc[1])
-                            if prev_val != 0:
-                                info["_calc_quarterly_growth"] = (recent_val - prev_val) / abs(prev_val)
-                                break
-        except Exception:
-            pass
+    # Fallback seguro para crescimento trimestral YoY (C) e CAGR anual 3-4 anos + ROE (A)
+    try:
+        q_stmt = ticker_obj.quarterly_income_stmt
+        if q_stmt is not None and not q_stmt.empty:
+            for row_label in ["Diluted EPS", "Basic EPS", "Net Income", "Net Income Common Stockholders"]:
+                if row_label in q_stmt.index:
+                    series = q_stmt.loc[row_label].dropna()
+                    # Coluna 0 (trimestre mais recente) vs Coluna 4 (mesmo trimestre do ano anterior - YoY)
+                    if len(series) >= 5:
+                        recent_val = float(series.iloc[0])
+                        yoy_prev_val = float(series.iloc[4])
+                        if yoy_prev_val > 0:
+                            info["_calc_quarterly_yoy_growth"] = (recent_val - yoy_prev_val) / yoy_prev_val
+                            break
+                        elif yoy_prev_val < 0 and recent_val > 0:
+                            # Reversão de prejuízo para lucro YoY
+                            info["_calc_quarterly_yoy_growth"] = (recent_val - yoy_prev_val) / abs(yoy_prev_val)
+                            break
+                        elif yoy_prev_val < 0 and recent_val <= 0:
+                            info["_calc_quarterly_yoy_negative"] = True
+                            break
+    except Exception:
+        pass
+
+    try:
+        a_stmt = ticker_obj.income_stmt
+        if a_stmt is not None and not a_stmt.empty:
+            for row_label in ["Net Income", "Net Income Common Stockholders", "Diluted EPS", "Basic EPS"]:
+                if row_label in a_stmt.index:
+                    series = a_stmt.loc[row_label].dropna()
+                    if len(series) >= 2:
+                        # Limita aos últimos 4 intervalos anuais disponíveis (3 a 4 anos no yfinance)
+                        series_window = series.iloc[:5]
+                        anos = len(series_window) - 1
+                        lucro_recente = float(series_window.iloc[0])
+                        lucro_antigo = float(series_window.iloc[-1])
+                        info["_calc_cagr_years"] = int(anos)
+                        if lucro_recente > 0 and lucro_antigo > 0 and anos >= 1:
+                            cagr_val = (lucro_recente / lucro_antigo) ** (1.0 / anos) - 1.0
+                            info["_calc_annual_cagr"] = float(cagr_val)
+                        else:
+                            info["_calc_annual_cagr_nonpositive"] = True
+                            info["_calc_recent_profit_positive"] = bool(lucro_recente > 0)
+                        break
+    except Exception:
+        pass
         
     return hist, info
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_ibov_data(period: str) -> pd.DataFrame:
+def fetch_ibov_data(period: str = "2y") -> pd.DataFrame:
     """
-    Busca os dados históricos do Ibovespa (^BVSP) com cache de 1 hora (3600s),
-    evitando downloads repetidos a cada troca de ativo.
+    Busca os dados históricos do Ibovespa (^BVSP) com cache de 1 hora (3600s).
+    Baixa sempre period='2y' (~500 pregões) independentemente do período selecionado
+    no gráfico pelo usuário, garantindo dados suficientes para calcular MM50 e MM200 sem NaN.
     """
     try:
         ibov_obj = yf.Ticker("^BVSP")
-        yf_period = PERIOD_MAPPING.get(period, "6mo")
-        hist = ibov_obj.history(period=yf_period, interval="1d")
+        hist = ibov_obj.history(period="2y", interval="1d")
         if hist is None or hist.empty:
             return pd.DataFrame()
 
@@ -124,13 +154,13 @@ def fetch_ibov_data(period: str) -> pd.DataFrame:
 
 def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_hist: pd.DataFrame) -> dict:
     """
-    Avalia os 6 critérios quantitativos da metodologia CAN SLM adaptada para a B3:
-    C - Current Earnings (Crescimento de Lucro Trimestral)
-    A - Annual Earnings (ROE >= 15% e Lucro Positivo)
+    Avalia os critérios quantitativos da metodologia CAN SLM adaptada para a B3:
+    M - Market Direction (Peso Principal via ^BVSP: MM50 e MM200 em 3 estados: ALTA, ATENCAO, BAIXA)
+    C - Current Earnings (Crescimento Trimestral YoY > 20%)
+    A - Annual Earnings (CAGR Anual > 25% em 3-4 anos + ROE >= 17%)
     N - New High (Preço até 15% abaixo da máxima de 52 semanas)
     S - Supply & Demand (Volume Relativo >= 1.2x em dia de alta)
-    L - Leader or Laggard (Força Relativa superando o Ibovespa no período)
-    M - Market Direction (Ibovespa acima da média móvel de 20 ou 50 períodos)
+    L - Leader or Laggard (Força Relativa superando o Ibovespa no período selecionado)
     Trata valores None ou NaN de forma segura como "N/D".
     """
     info = ticker_info if isinstance(ticker_info, dict) else {}
@@ -138,74 +168,106 @@ def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_h
     short_parts = []
 
     # --------------------------------------------------------------------------
-    # C - Current Earnings (Crescimento Trimestral de Lucro > 15% ou positivo)
+    # C - Current Earnings (Lucro Trimestral YoY > 20%)
     # --------------------------------------------------------------------------
-    q_growth = info.get("earningsQuarterlyGrowth")
-    if q_growth is None or pd.isna(q_growth):
-        q_growth = info.get("_calc_quarterly_growth")
-    if q_growth is None or pd.isna(q_growth):
-        q_growth = info.get("earningsGrowth")
+    q_yoy = info.get("earningsQuarterlyGrowth")
+    if q_yoy is None or pd.isna(q_yoy):
+        q_yoy = info.get("_calc_quarterly_yoy_growth")
 
-    if q_growth is not None and not pd.isna(q_growth):
+    if q_yoy is not None and not pd.isna(q_yoy):
         try:
-            q_pct = float(q_growth) * 100.0
-            c_status = "approved" if q_pct > 15.0 or q_pct > 0.0 else "rejected"
-            c_val = f"{q_pct:+.1f}%"
+            q_pct = float(q_yoy) * 100.0
+            c_status = "approved" if q_yoy > 0.20 else "rejected"
+            c_val = f"YoY {q_pct:+.1f}%"
             c_desc = (
-                "Crescimento trimestral forte (> 15%)."
-                if q_pct >= 15.0
-                else ("Crescimento trimestral positivo." if q_pct > 0 else "Retração no lucro trimestral.")
+                f"Aprovado: Lucro/LPA trimestral cresceu {q_pct:+.1f}% YoY (meta > 20%)."
+                if c_status == "approved"
+                else f"Abaixo da meta: Lucro/LPA trimestral em {q_pct:+.1f}% YoY (exige > 20%)."
             )
-            short_parts.append(f"Lucro Trim: {c_val}")
+            short_parts.append(f"LPA YoY: {q_pct:+.1f}%")
         except Exception:
-            c_status, c_val, c_desc = "na", "N/D", "Dados trimestrais indisponíveis no Yahoo Finance."
-            short_parts.append("Lucro Trim: N/D")
+            c_status, c_val, c_desc = "na", "N/D", "Dados de LPA trimestral YoY indisponíveis."
+            short_parts.append("LPA YoY: N/D")
+    elif info.get("_calc_quarterly_yoy_negative"):
+        c_status = "rejected"
+        c_val = "Prejuízo Trim."
+        c_desc = "Resultado trimestral negativo (prejuízo no trimestre atual e/ou anterior)."
+        short_parts.append("LPA YoY: Prejuízo")
     else:
-        c_status, c_val, c_desc = "na", "N/D", "Dados trimestrais indisponíveis para este ticker."
-        short_parts.append("Lucro Trim: N/D")
+        c_status, c_val, c_desc = "na", "N/D", "Dados de lucro trimestral YoY indisponíveis para este ticker."
+        short_parts.append("LPA YoY: N/D")
 
     criteria_details.append({
         "letter": "C",
-        "name": "Current Earnings (Lucro Trimestral)",
+        "name": "Current Earnings (Lucro Trimestral YoY > 20%)",
         "status": c_status,
         "value": c_val,
         "description": c_desc
     })
 
     # --------------------------------------------------------------------------
-    # A - Annual Earnings (ROE >= 15% e lucro líquido anual positivo)
+    # A - Annual Earnings (CAGR > 25% em 3-4 anos + ROE >= 17%)
     # --------------------------------------------------------------------------
+    cagr_anual = info.get("_calc_annual_cagr")
+    cagr_years = info.get("_calc_cagr_years", 3)
+    cagr_nonpositive = info.get("_calc_annual_cagr_nonpositive", False)
     roe = info.get("returnOnEquity")
-    net_inc = info.get("netIncomeToCommon")
-    profit_margin = info.get("profitMargins")
-    trailing_eps = info.get("trailingEps")
 
-    if roe is not None and not pd.isna(roe):
+    has_cagr = cagr_anual is not None and not pd.isna(cagr_anual)
+    has_roe = roe is not None and not pd.isna(roe)
+
+    if has_cagr or has_roe or cagr_nonpositive:
         try:
-            roe_pct = float(roe) * 100.0
-            # Verifica se o lucro líquido anual é positivo (quando disponível)
-            lucro_positivo = True
-            if net_inc is not None and not pd.isna(net_inc):
-                lucro_positivo = float(net_inc) > 0
-            elif profit_margin is not None and not pd.isna(profit_margin):
-                lucro_positivo = float(profit_margin) > 0
-            elif trailing_eps is not None and not pd.isna(trailing_eps):
-                lucro_positivo = float(trailing_eps) > 0
+            cagr_pct = float(cagr_anual) * 100.0 if has_cagr else None
+            roe_pct = float(roe) * 100.0 if has_roe else None
 
-            a_status = "approved" if (roe_pct >= 15.0 and lucro_positivo) else "rejected"
-            a_val = f"ROE {roe_pct:.1f}%"
-            a_desc = "Rentabilidade anual sólida (ROE >= 15% e lucro positivo)." if a_status == "approved" else "Abaixo da meta (exige ROE >= 15% e lucro positivo)."
-            short_parts.append(f"ROE: {roe_pct:.1f}%")
+            if cagr_nonpositive:
+                a_status = "rejected"
+                roe_str = f" | ROE {roe_pct:.1f}%" if roe_pct is not None else ""
+                a_val = f"CAGR N/A (Prejuízo){roe_str}"
+                a_desc = "Balanço anual registra prejuízo no período base ou recente (exige CAGR > 25% e ROE >= 17%)."
+                short_parts.append(f"CAGR Anual: Prejuízo ({f'ROE {roe_pct:.0f}%' if roe_pct is not None else 'ROE N/D'})")
+            elif has_cagr and has_roe:
+                is_approved = (float(cagr_anual) > 0.25) and (float(roe) >= 0.17)
+                a_status = "approved" if is_approved else "rejected"
+                a_val = f"CAGR {cagr_pct:+.1f}% ({cagr_years}a) | ROE {roe_pct:.1f}%"
+                a_desc = (
+                    f"Aprovado: CAGR anual de {cagr_pct:+.1f}% (> 25%) e ROE de {roe_pct:.1f}% (>= 17%)."
+                    if is_approved
+                    else f"Abaixo da meta: exige CAGR anual > 25% (atual {cagr_pct:+.1f}%) e ROE >= 17% (atual {roe_pct:.1f}%)."
+                )
+                short_parts.append(f"CAGR Anual: {cagr_pct:+.1f}% (ROE {roe_pct:.0f}%)")
+            elif has_cagr and not has_roe:
+                if float(cagr_anual) <= 0.25:
+                    a_status = "rejected"
+                    a_val = f"CAGR {cagr_pct:+.1f}% ({cagr_years}a) | ROE N/D"
+                    a_desc = f"CAGR anual de {cagr_pct:+.1f}% abaixo da meta de 25% (ROE indisponível)."
+                else:
+                    a_status = "na"
+                    a_val = f"CAGR {cagr_pct:+.1f}% ({cagr_years}a) | ROE N/D"
+                    a_desc = f"CAGR anual atende (> 25%), mas ROE indisponível no Yahoo Finance (meta >= 17%)."
+                short_parts.append(f"CAGR Anual: {cagr_pct:+.1f}% (ROE N/D)")
+            else:
+                # Apenas ROE disponível
+                if float(roe) < 0.17:
+                    a_status = "rejected"
+                    a_val = f"CAGR N/D | ROE {roe_pct:.1f}%"
+                    a_desc = f"ROE de {roe_pct:.1f}% abaixo da meta mínima de 17% (CAGR anual indisponível)."
+                else:
+                    a_status = "na"
+                    a_val = f"CAGR N/D | ROE {roe_pct:.1f}%"
+                    a_desc = f"ROE de {roe_pct:.1f}% atende (>= 17%), mas histórico de balanços p/ CAGR indisponível."
+                short_parts.append(f"CAGR Anual: N/D (ROE {roe_pct:.0f}%)")
         except Exception:
-            a_status, a_val, a_desc = "na", "N/D", "Indicador ROE indisponível."
-            short_parts.append("ROE: N/D")
+            a_status, a_val, a_desc = "na", "N/D", "Falha ao calcular CAGR anual e ROE."
+            short_parts.append("CAGR Anual: N/D")
     else:
-        a_status, a_val, a_desc = "na", "N/D", "Indicador ROE anual indisponível para este ativo."
-        short_parts.append("ROE: N/D")
+        a_status, a_val, a_desc = "na", "N/D", "Histórico anual de lucros e ROE indisponíveis para este ativo."
+        short_parts.append("CAGR Anual: N/D")
 
     criteria_details.append({
         "letter": "A",
-        "name": "Annual Earnings (Rentabilidade Anual)",
+        "name": "Annual Earnings (CAGR > 25% + ROE >= 17%)",
         "status": a_status,
         "value": a_val,
         "description": a_desc
@@ -227,7 +289,11 @@ def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_h
             dist_high_pct = (ratio_high - 1.0) * 100.0
             n_status = "approved" if ratio_high >= 0.85 else "rejected"
             n_val = f"{dist_high_pct:+.1f}% (Topo: R$ {high_52w:.2f})"
-            n_desc = "Negociando próximo à máxima de 52 semanas (até 15% do topo)." if n_status == "approved" else "Distante mais de 15% da máxima de 52 semanas."
+            n_desc = (
+                "Negociando próximo à máxima de 52 semanas (até 15% abaixo do topo)."
+                if n_status == "approved"
+                else "Distante mais de 15% da máxima de 52 semanas."
+            )
             short_parts.append(f"Dist. Máx 52s: {dist_high_pct:+.1f}%")
         else:
             n_status, n_val, n_desc = "na", "N/D", "Máxima de 52 semanas indisponível."
@@ -238,7 +304,7 @@ def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_h
 
     criteria_details.append({
         "letter": "N",
-        "name": "New High (Proximidade do Topo 52s)",
+        "name": "New High (Proximidade do Topo 52s <= 15%)",
         "status": n_status,
         "value": n_val,
         "description": n_desc
@@ -261,7 +327,7 @@ def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_h
             s_desc = (
                 "Forte demanda institucional (Volume >= 1.2x a média de 20d com alta no preço)."
                 if s_status == "approved"
-                else "Sem pico comprador (exige Volume >= 1.2x a média de 20d acompanhado de alta)."
+                else "Sem pico comprador no último pregão (meta: Volume >= 1.2x média 20d com alta)."
             )
             short_parts.append(f"Vol. Rel: {vol_rel:.1f}x")
         else:
@@ -273,21 +339,27 @@ def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_h
 
     criteria_details.append({
         "letter": "S",
-        "name": "Supply & Demand (Oferta e Demanda)",
+        "name": "Supply & Demand (Vol. Relativo >= 1.2x + Alta)",
         "status": s_status,
         "value": s_val,
         "description": s_desc
     })
 
     # --------------------------------------------------------------------------
-    # L - Leader or Laggard (Força Relativa vs ^BVSP no período selecionado)
+    # L - Leader or Laggard (Força Relativa vs ^BVSP filtrando pela data inicial de hist_data)
     # --------------------------------------------------------------------------
     if hist_data is not None and len(hist_data) >= 2 and ibov_hist is not None and len(ibov_hist) >= 2:
         try:
+            start_dt = pd.Timestamp(hist_data.index[0]).tz_localize(None)
+            ibov_idx_naive = pd.to_datetime(ibov_hist.index).tz_localize(None)
+            ibov_slice = ibov_hist[ibov_idx_naive >= start_dt]
+            if len(ibov_slice) < 2:
+                ibov_slice = ibov_hist.tail(len(hist_data))
+
             asset_start = float(hist_data['Close'].iloc[0])
             asset_end = float(hist_data['Close'].iloc[-1])
-            ibov_start = float(ibov_hist['Close'].iloc[0])
-            ibov_end = float(ibov_hist['Close'].iloc[-1])
+            ibov_start = float(ibov_slice['Close'].iloc[0])
+            ibov_end = float(ibov_slice['Close'].iloc[-1])
 
             asset_ret_pct = ((asset_end / asset_start) - 1.0) * 100.0 if asset_start > 0 else 0.0
             ibov_ret_pct = ((ibov_end / ibov_start) - 1.0) * 100.0 if ibov_start > 0 else 0.0
@@ -296,9 +368,9 @@ def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_h
             l_status = "approved" if asset_ret_pct > ibov_ret_pct else "rejected"
             l_val = f"{diff_ibov:+.1f}% vs IBOV ({asset_ret_pct:+.1f}% vs {ibov_ret_pct:+.1f}%)"
             l_desc = (
-                "Ativo líder: performance superior ao Ibovespa no período."
+                "Ativo líder: superou o Ibovespa na janela do gráfico selecionado."
                 if l_status == "approved"
-                else "Performance abaixo do Ibovespa no período selecionado."
+                else "Abaixo do índice: performance inferior ao Ibovespa no período selecionado."
             )
             short_parts.append(f"vs IBOV: {diff_ibov:+.1f}%")
         except Exception:
@@ -316,42 +388,73 @@ def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_h
         "description": l_desc
     })
 
+    # Placar específico dos 5 critérios da ação (C, A, N, S, L)
+    stock_score = sum(1 for item in criteria_details if item["status"] == "approved")
+    stock_valid_criteria = sum(1 for item in criteria_details if item["status"] in ("approved", "rejected"))
+
     # --------------------------------------------------------------------------
-    # M - Market Direction (Tendência do Mercado: ^BVSP acima da MMA 20 ou 50)
+    # M - Market Direction (Peso Principal via ^BVSP: MM50 e MM200 sobre 2y)
     # --------------------------------------------------------------------------
-    if ibov_hist is not None and not ibov_hist.empty and len(ibov_hist) >= 5:
+    market_regime = {
+        "status": "ND",
+        "ibov_close": None,
+        "mm50": None,
+        "mm200": None,
+        "approved": False
+    }
+
+    if ibov_hist is not None and not ibov_hist.empty and len(ibov_hist) >= 50:
         try:
             ibov_close = float(ibov_hist['Close'].iloc[-1])
-            win_20 = min(20, len(ibov_hist))
-            sma20_ibov = float(ibov_hist['Close'].rolling(window=win_20).mean().iloc[-1])
+            mm50_ibov = float(ibov_hist['Close'].rolling(window=50).mean().iloc[-1])
+            win_200 = min(200, len(ibov_hist))
+            mm200_ibov = float(ibov_hist['Close'].rolling(window=win_200).mean().iloc[-1])
 
-            if len(ibov_hist) >= 50:
-                sma50_ibov = float(ibov_hist['Close'].rolling(window=50).mean().iloc[-1])
-                above_ma = (ibov_close > sma20_ibov) or (ibov_close > sma50_ibov)
-                ref_label = "MMA20/50"
+            if ibov_close > mm50_ibov and ibov_close > mm200_ibov:
+                regime_status = "ALTA"
+                m_status = "approved"
+                regime_summary = "ALTA (acima MM50 e MM200)"
+                m_val = f"ALTA ({ibov_close:,.0f} pts)"
+                m_desc = (
+                    f"Mercado: o mais importante. ^BVSP ({ibov_close:,.0f} pts) opera acima da MM50 ({mm50_ibov:,.0f}) "
+                    f"e da MM200 ({mm200_ibov:,.0f}). Tendência primária e secundária de alta."
+                )
+            elif ibov_close < mm50_ibov and ibov_close < mm200_ibov:
+                regime_status = "BAIXA"
+                m_status = "rejected"
+                regime_summary = "BAIXA (abaixo MM50 e MM200)"
+                m_val = f"BAIXA ({ibov_close:,.0f} pts)"
+                m_desc = (
+                    f"Mercado: o mais importante. ^BVSP ({ibov_close:,.0f} pts) opera abaixo da MM50 ({mm50_ibov:,.0f}) "
+                    f"e da MM200 ({mm200_ibov:,.0f}). Risco elevado — 3 de cada 4 ações caem junto com o índice."
+                )
             else:
-                above_ma = ibov_close > sma20_ibov
-                ref_label = f"MMA{win_20}"
+                regime_status = "ATENCAO"
+                m_status = "rejected"
+                regime_summary = "ATENCAO (entre MM50 e MM200)"
+                m_val = f"ATENÇÃO ({ibov_close:,.0f} pts)"
+                m_desc = (
+                    f"Mercado em transição/cautela: ^BVSP ({ibov_close:,.0f} pts) entre a MM50 ({mm50_ibov:,.0f}) "
+                    f"e a MM200 ({mm200_ibov:,.0f}). Exige seletividade redobrada."
+                )
 
-            m_status = "approved" if above_ma else "rejected"
-            m_trend_str = "Alta" if above_ma else "Pressão/Baixa"
-            m_val = f"IBOV em {m_trend_str} ({ibov_close:,.0f} pts)"
-            m_desc = (
-                f"Direção favorável do mercado (^BVSP negociando acima da {ref_label})."
-                if m_status == "approved"
-                else f"Mercado em cautela/correção (^BVSP abaixo da {ref_label})."
-            )
-            short_parts.append(f"IBOV: {m_trend_str}")
+            market_regime = {
+                "status": regime_status,
+                "ibov_close": ibov_close,
+                "mm50": mm50_ibov,
+                "mm200": mm200_ibov,
+                "approved": regime_status == "ALTA"
+            }
         except Exception:
-            m_status, m_val, m_desc = "na", "N/D", "Falha ao calcular tendência do Ibovespa."
-            short_parts.append("IBOV: N/D")
+            m_status, m_val, m_desc = "na", "N/D", "Falha ao calcular MM50 e MM200 do ^BVSP."
+            regime_summary = "N/D"
     else:
-        m_status, m_val, m_desc = "na", "N/D", "Dados históricos do ^BVSP indisponíveis."
-        short_parts.append("IBOV: N/D")
+        m_status, m_val, m_desc = "na", "N/D", "Dados históricos de 2 anos do ^BVSP indisponíveis."
+        regime_summary = "N/D"
 
     criteria_details.append({
         "letter": "M",
-        "name": "Market Direction (Tendência do Mercado B3)",
+        "name": "Market Direction (Regime IBOV: MM50 & MM200)",
         "status": m_status,
         "value": m_val,
         "description": m_desc
@@ -360,11 +463,18 @@ def calculate_canslim_metrics(hist_data: pd.DataFrame, ticker_info: dict, ibov_h
     score = sum(1 for item in criteria_details if item["status"] == "approved")
     valid_criteria = sum(1 for item in criteria_details if item["status"] in ("approved", "rejected"))
 
-    summary_line = f"CAN SLM ({score}/{valid_criteria}): " + " | ".join(short_parts)
+    summary_line = (
+        f"Regime Mercado (IBOV): {regime_summary} | "
+        f"Score Ativo (C-A-N-S-L): {stock_score}/{stock_valid_criteria} | "
+        + " | ".join(short_parts)
+    )
 
     return {
         "score": score,
         "valid_criteria": valid_criteria,
+        "stock_score": stock_score,
+        "stock_valid_criteria": stock_valid_criteria,
+        "market_regime": market_regime,
         "criteria_details": criteria_details,
         "summary_line": summary_line
     }

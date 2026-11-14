@@ -91,13 +91,13 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 
 ### [`v1.5.0`] — Atual
 - **Adicionado:** **Análise Quantitativa CAN SLM (adaptada para a B3)** em `services/market_data.py`:
-  - **C (Current Earnings):** Crescimento trimestral de lucro (`earningsQuarterlyGrowth` com fallback seguro para `quarterly_income_stmt`).
-  - **A (Annual Earnings):** ROE anual $\ge 15\%$ e lucro líquido positivo.
+  - **M (Market Direction — Peso Principal via `^BVSP` `2y`):** Calcula **MM50** e **MM200** sobre 2 anos do Ibovespa (`fetch_ibov_data()` cacheado por 1h) e classifica o regime em `ALTA` (`^BVSP > MM50 e MM200`), `ATENCAO` (entre `MM50` e `MM200`) ou `BAIXA` (`^BVSP < MM50 e MM200`), exibido em banner de destaque no topo do card.
+  - **C (Current Earnings):** Crescimento trimestral do lucro/LPA YoY $> 20\%$ (`earningsQuarterlyGrowth` ou coluna `0` vs `4` de `quarterly_income_stmt`).
+  - **A (Annual Earnings):** **CAGR Anual** $> 25\%$ nos últimos 3–4 exercícios (`income_stmt`) combinado com **ROE** $\ge 17\%$ (`returnOnEquity`), com tratamento seguro contra prejuízos na base.
   - **N (New High):** Proximidade de até 15% da máxima de 52 semanas (`preco_atual / fiftyTwoWeekHigh >= 0.85`).
   - **S (Supply & Demand):** Volume relativo $\ge 1.2\times$ a média de 20 pregões com variação positiva de preço.
-  - **L (Leader or Laggard):** Força relativa comparada ao Ibovespa (`^BVSP` cacheado por 1h via `fetch_ibov_data`).
-  - **M (Market Direction):** Tendência do Ibovespa acima de sua média móvel de 20/50 períodos.
-- **Adicionado:** Componente visual responsivo `render_canslim_card` em `ui/components.py` com placar dinâmico e detalhamento expansível dos 6 critérios (`✅`, `⚠️`, `➖ N/D`).
+  - **L (Leader or Laggard):** Força relativa comparada ao Ibovespa recortado para a mesma janela temporal do gráfico selecionado (`hist_data.index[0]`).
+- **Adicionado:** Componente visual responsivo `render_canslim_card` em `ui/components.py` com banner do Regime de Mercado (**M**) no topo, placar dos 5 critérios da ação (**C-A-N-S-L**) e detalhamento expansível (`✅`, `⚠️`, `➖ N/D`).
 - **Otimizado:** Injeção compacta da `summary_line` do CAN SLM dentro de `metrics["summary_line"]` para enriquecer o diagnóstico do Gemini com impacto mínimo de tokens.
 
 ### [`v1.4.1`]

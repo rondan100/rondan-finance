@@ -175,7 +175,7 @@ with st.spinner(f"Extraindo notícias recentes sobre {company_name}..."):
 
 # 3. Métricas Técnicas no Topo e Checklist Quantitativo CAN SLM
 metrics = calculate_market_metrics(hist_data)
-ibov_data = fetch_ibov_data(period_selected)
+ibov_data = fetch_ibov_data()
 canslim_data = calculate_canslim_metrics(hist_data, ticker_info, ibov_data)
 if canslim_data and canslim_data.get("summary_line"):
     metrics["summary_line"] = f"{metrics['summary_line']} || {canslim_data['summary_line']}"
