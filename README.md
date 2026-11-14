@@ -78,7 +78,8 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 
 | Versão | Data | Status | Tipo | Destaques Principais |
 | :---: | :---: | :---: | :---: | :--- |
-| **`v1.4.1`** | `Nov/2026` | 🟢 **Atual** | `PATCH` | Streaming em tempo real (resposta em ~300ms), corte de tokens e disparo direto no assistente de pesquisa |
+| **`v1.5.0`** | `Nov/2026` | 🟢 **Atual** | `MINOR` | Checklist quantitativo **CAN SLM** adaptado para a B3, força relativa vs Ibovespa (`^BVSP`) e integração enxuta no prompt da IA |
+| **`v1.4.1`** | `Nov/2026` | ⚪ Estável | `PATCH` | Streaming em tempo real (resposta em ~300ms), corte de tokens, ativos clicáveis no Radar B3 e disparo direto |
 | **`v1.4.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Suporte ao Google AI Pro (modelos Pro e `argon`), barra de pesquisa/chat com IA contextualizada com gráfico e notícias |
 | **`v1.3.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Radar B3 (Scanner de oportunidades/compra), Cotação de hoje no Candlestick e correção de candles zerados |
 | **`v1.2.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Integração Gemini 3.5 Flash Lite (500 req/dia), cotas dinâmicas e Enum de ativos B3 |
@@ -88,7 +89,18 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 <details open>
 <summary><b>🔍 Detalhes das Alterações por Versão</b></summary>
 
-### [`v1.4.1`] — Atual
+### [`v1.5.0`] — Atual
+- **Adicionado:** **Análise Quantitativa CAN SLM (adaptada para a B3)** em `services/market_data.py`:
+  - **C (Current Earnings):** Crescimento trimestral de lucro (`earningsQuarterlyGrowth` com fallback seguro para `quarterly_income_stmt`).
+  - **A (Annual Earnings):** ROE anual $\ge 15\%$ e lucro líquido positivo.
+  - **N (New High):** Proximidade de até 15% da máxima de 52 semanas (`preco_atual / fiftyTwoWeekHigh >= 0.85`).
+  - **S (Supply & Demand):** Volume relativo $\ge 1.2\times$ a média de 20 pregões com variação positiva de preço.
+  - **L (Leader or Laggard):** Força relativa comparada ao Ibovespa (`^BVSP` cacheado por 1h via `fetch_ibov_data`).
+  - **M (Market Direction):** Tendência do Ibovespa acima de sua média móvel de 20/50 períodos.
+- **Adicionado:** Componente visual responsivo `render_canslim_card` em `ui/components.py` com placar dinâmico e detalhamento expansível dos 6 critérios (`✅`, `⚠️`, `➖ N/D`).
+- **Otimizado:** Injeção compacta da `summary_line` do CAN SLM dentro de `metrics["summary_line"]` para enriquecer o diagnóstico do Gemini com impacto mínimo de tokens.
+
+### [`v1.4.1`]
 - **Adicionado:** **Ativos Clicáveis no Radar B3**: Botão "📊 Analisar" em cada card de oportunidade, permitindo carregar o ativo instantaneamente no Dashboard principal com sincronização automática do seletor da barra lateral.
 - **Adicionado:** **Streaming em Tempo Real (token a token)** via `st.write_stream`: a resposta começa a aparecer na tela em ~300ms com efeito de digitação ao vivo, eliminando telas travadas ou spinners demorados.
 - **Adicionado:** Suporte à **varredura completa de todos os 44 ativos da B3** cadastrados em `config.py` com seletor de abrangência (*Todos os 44 Ativos* ou *Top 20 Mais Líquidos*).

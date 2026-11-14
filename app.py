@@ -13,7 +13,9 @@ from services.market_data import (
     normalize_ticker,
     get_search_name,
     fetch_stock_data,
+    fetch_ibov_data,
     calculate_market_metrics,
+    calculate_canslim_metrics,
     scan_b3_market_opportunities
 )
 from services.news_service import fetch_google_news, format_news_for_prompt
@@ -22,6 +24,7 @@ from ui.styles import apply_custom_css
 from ui.charts import create_candlestick_chart
 from ui.components import (
     render_top_metrics,
+    render_canslim_card,
     render_ai_card,
     render_reasons_and_variables,
     render_news_expander,
@@ -170,9 +173,15 @@ company_name = get_search_name(ticker_normalized, ticker_info)
 with st.spinner(f"Extraindo notícias recentes sobre {company_name}..."):
     news_items = fetch_google_news(company_name)
 
-# 3. Métricas Técnicas no Topo
+# 3. Métricas Técnicas no Topo e Checklist Quantitativo CAN SLM
 metrics = calculate_market_metrics(hist_data)
+ibov_data = fetch_ibov_data(period_selected)
+canslim_data = calculate_canslim_metrics(hist_data, ticker_info, ibov_data)
+if canslim_data and canslim_data.get("summary_line"):
+    metrics["summary_line"] = f"{metrics['summary_line']} || {canslim_data['summary_line']}"
+
 render_top_metrics(metrics, ticker_normalized, period_selected)
+render_canslim_card(canslim_data)
 
 st.markdown("---")
 

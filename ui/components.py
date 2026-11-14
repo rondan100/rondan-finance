@@ -44,6 +44,109 @@ def render_top_metrics(metrics: dict, ticker: str, period: str):
         )
 
 
+def render_canslim_card(canslim_data: dict):
+    """
+    Renderiza o card e checklist quantitativo CAN SLM adaptado para a B3,
+    com layout limpo e responsivo para desktop e celular.
+    """
+    if not canslim_data:
+        return
+
+    score = canslim_data.get("score", 0)
+    valid_criteria = canslim_data.get("valid_criteria", 6)
+    details = canslim_data.get("criteria_details", [])
+
+    # Define cor de destaque conforme pontuação
+    if valid_criteria > 0 and (score / valid_criteria) >= 0.65:
+        border_color = "#10b981"
+        badge_bg = "rgba(16, 185, 129, 0.18)"
+        status_label = "Forte Alinhamento"
+    elif valid_criteria > 0 and (score / valid_criteria) >= 0.40:
+        border_color = "#f59e0b"
+        badge_bg = "rgba(245, 158, 11, 0.18)"
+        status_label = "Alinhamento Moderado"
+    else:
+        border_color = "#ef4444"
+        badge_bg = "rgba(239, 68, 68, 0.18)"
+        status_label = "Baixo Alinhamento"
+
+    # Gera pílulas rápidas das 6 letras para visualização imediata no topo
+    pills_html = ""
+    for item in details:
+        st_code = item.get("status", "na")
+        letter = item.get("letter", "")
+        if st_code == "approved":
+            icon = "✅"
+            p_color = "#10b981"
+        elif st_code == "rejected":
+            icon = "⚠️"
+            p_color = "#f59e0b"
+        else:
+            icon = "➖"
+            p_color = "#9ca3af"
+
+        pills_html += (
+            f'<span style="display:inline-flex;align-items:center;gap:4px;'
+            f'background:rgba(255,255,255,0.05);border:1px solid {p_color}55;'
+            f'border-radius:6px;padding:3px 8px;font-size:0.82rem;font-weight:600;color:#f3f4f6;">'
+            f'{icon} {letter}</span> '
+        )
+
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(31, 41, 55, 0.7) 100%);
+                border: 1px solid #374151; border-left: 5px solid {border_color};
+                border-radius: 10px; padding: 14px 18px; margin: 12px 0 10px 0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <span style="font-size: 1.08rem; font-weight: 700; color: #ffffff;">
+                    📊 Checklist Quantitativo CAN SLM: {score}/{valid_criteria} critérios atendidos
+                </span>
+                <span style="background: {badge_bg}; color: {border_color}; border: 1px solid {border_color};
+                             padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;">
+                    {status_label}
+                </span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                {pills_html}
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("Ver detalhes dos critérios CAN SLM", expanded=False):
+        cols = st.columns(2)
+        for idx, item in enumerate(details):
+            st_code = item.get("status", "na")
+            if st_code == "approved":
+                icon_str = "✅"
+                accent = "#10b981"
+            elif st_code == "rejected":
+                icon_str = "⚠️"
+                accent = "#f59e0b"
+            else:
+                icon_str = "➖ N/D"
+                accent = "#6b7280"
+
+            with cols[idx % 2]:
+                st.markdown(f"""
+                <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748;
+                            border-left: 4px solid {accent}; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-weight: 700; color: #ffffff; font-size: 0.95rem;">
+                            {icon_str} &nbsp;<b>{item.get('letter')}</b> — {item.get('name')}
+                        </span>
+                        <span style="font-weight: 700; color: {accent}; font-size: 0.9rem; background: rgba(0,0,0,0.25);
+                                     padding: 2px 8px; border-radius: 6px;">
+                            {item.get('value', 'N/D')}
+                        </span>
+                    </div>
+                    <div style="font-size: 0.84rem; color: #9ca3af; margin-top: 6px; line-height: 1.4;">
+                        {item.get('description', '')}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+
 def render_ai_card(ai_result: dict):
     """
     Renderiza o card de IA estilizado de acordo com a tendência (ALTA, BAIXA, NEUTRA).
