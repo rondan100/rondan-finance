@@ -8,7 +8,8 @@ import streamlit as st
 
 def render_top_metrics(metrics: dict, ticker: str, period: str):
     """
-    Exibe os indicadores de topo: Preço atual, variação diária, médias móveis e extremos.
+    Exibe os indicadores de topo: Preço atual, variação diária, médias móveis e extremos,
+    com tooltips explicativos (help=) para facilitar a leitura em swing trade / momentum.
     """
     m1, m2, m3, m4 = st.columns(4)
 
@@ -16,7 +17,8 @@ def render_top_metrics(metrics: dict, ticker: str, period: str):
         st.metric(
             label=f"Preço Atual ({ticker})",
             value=f"R$ {metrics['current_price']:.2f}",
-            delta=f"{metrics['daily_delta_val']:+.2f} R$ ({metrics['daily_delta_pct']:+.2f}%)"
+            delta=f"{metrics['daily_delta_val']:+.2f} R$ ({metrics['daily_delta_pct']:+.2f}%)",
+            help="Última cotação registrada no pregão da B3 e variação em relação ao fechamento anterior."
         )
 
     with m2:
@@ -24,7 +26,8 @@ def render_top_metrics(metrics: dict, ticker: str, period: str):
             label="MMA 9 períodos",
             value=f"R$ {metrics['sma9_val']:.2f}",
             delta=f"{(metrics['current_price'] - metrics['sma9_val']):+.2f} vs preço",
-            delta_color="normal"
+            delta_color="normal",
+            help="Média Móvel Aritmética dos últimos 9 pregões (~2 semanas). Mede o impulso imediato de curtíssimo prazo."
         )
 
     with m3:
@@ -32,7 +35,8 @@ def render_top_metrics(metrics: dict, ticker: str, period: str):
             label="MMA 21 períodos",
             value=f"R$ {metrics['sma21_val']:.2f}",
             delta=f"{(metrics['current_price'] - metrics['sma21_val']):+.2f} vs preço",
-            delta_color="normal"
+            delta_color="normal",
+            help="Média Móvel Aritmética dos últimos 21 pregões (~1 mês útil). Principal referência de suporte/resistência para swing trade."
         )
 
     with m4:
@@ -40,15 +44,16 @@ def render_top_metrics(metrics: dict, ticker: str, period: str):
             label=f"Faixa ({period})",
             value=f"R$ {metrics['max_period']:.2f}",
             delta=f"Mín: R$ {metrics['min_period']:.2f}",
-            delta_color="off"
+            delta_color="off",
+            help="Cotação máxima (topo) e mínima (fundo) atingidas pelo ativo dentro da janela temporal selecionada no gráfico."
         )
 
 
 def render_canslim_card(canslim_data: dict):
     """
-    Renderiza o card e checklist quantitativo CAN SLM adaptado para a B3,
-    destacando o Regime de Mercado (M - Ibovespa MM50/MM200) no topo e,
-    logo abaixo, o placar dos 5 critérios da ação (C, A, N, S, L).
+    Renderiza o card e checklist quantitativo CAN SLM focado em Swing Trade / Momentum,
+    destacando o Regime de Mercado (M - Ibovespa MM21/MM50/MM200), o Veredito Operacional
+    (trade_verdict), o placar dos 5 critérios da ação (C, A, N, S, L) e glossário completo.
     """
     if not canslim_data:
         return
@@ -56,32 +61,76 @@ def render_canslim_card(canslim_data: dict):
     market_regime = canslim_data.get("market_regime", {}) or {}
     regime_status = market_regime.get("status", "ND")
     ibov_close = market_regime.get("ibov_close")
+    mm21 = market_regime.get("mm21")
     mm50 = market_regime.get("mm50")
     mm200 = market_regime.get("mm200")
+    trade_verdict = canslim_data.get("trade_verdict", "EVITAR")
 
-    # 1. Banner de Destaque do Critério M (Direção do Mercado — Peso Principal)
-    if regime_status == "ALTA" and ibov_close is not None:
+    # 1. Banner de Destaque do Critério M (Direção do Mercado — MM21, MM50 e MM200)
+    if regime_status == "ALTA_FORTE" and ibov_close is not None:
         st.success(
-            f"🟢 **M — Direção do Mercado (IBOV em ALTA):** Fechamento aos **{ibov_close:,.0f} pts**, "
-            f"operando acima da **MM50 ({mm50:,.0f})** e da **MM200 ({mm200:,.0f})**. "
-            f"*Cenário favorável para compras (o mercado determina se você ganha ou perde).*"
+            f"🟢 **M — Direção do Mercado (IBOV em ALTA FORTE):** `^BVSP` aos **{ibov_close:,.0f} pts** | "
+            f"**MM21:** {mm21:,.0f} • **MM50:** {mm50:,.0f} • **MM200:** {mm200:,.0f}. "
+            f"*Tendência alinhada em todos os prazos — cenário ideal para rompimentos e swing trade.*"
         )
-    elif regime_status == "ATENCAO" and ibov_close is not None:
+    elif regime_status == "RETOMADA_CURTO" and ibov_close is not None:
+        st.info(
+            f"🔵 **M — Direção do Mercado (IBOV em RETOMADA DE CURTO PRAZO):** `^BVSP` aos **{ibov_close:,.0f} pts** | "
+            f"**MM21:** {mm21:,.0f} • **MM50:** {mm50:,.0f} • **MM200:** {mm200:,.0f}. "
+            f"*Acima da MM21, mas ainda abaixo da MM50/MM200 — início de reversão, permite operações táticas de curto prazo com stop ajustado.*"
+        )
+    elif regime_status == "CAUTELA" and ibov_close is not None:
         st.warning(
-            f"🟡 **M — Direção do Mercado (IBOV em ZONA DE CAUTELA):** Fechamento aos **{ibov_close:,.0f} pts**, "
-            f"oscilando entre a **MM50 ({mm50:,.0f})** e a **MM200 ({mm200:,.0f})**. "
-            f"*Mercado em transição — exige seletividade redobrada.*"
+            f"🟡 **M — Direção do Mercado (IBOV em ZONA DE CAUTELA):** `^BVSP` aos **{ibov_close:,.0f} pts** | "
+            f"**MM21:** {mm21:,.0f} • **MM50:** {mm50:,.0f} • **MM200:** {mm200:,.0f}. "
+            f"*Abaixo da MM21, mas sustentado pela MM50/MM200 — correção curta dentro de tendência maior; aguardar recuperar a MM21.*"
         )
     elif regime_status == "BAIXA" and ibov_close is not None:
         st.error(
-            f"🔴 **M — Direção do Mercado (IBOV em TENDÊNCIA DE BAIXA):** Fechamento aos **{ibov_close:,.0f} pts**, "
-            f"abaixo da **MM50 ({mm50:,.0f})** e da **MM200 ({mm200:,.0f})**. "
-            f"*Risco elevado mesmo para ações fortes — evite ir contra a maré do mercado.*"
+            f"🔴 **M — Direção do Mercado (IBOV em TENDÊNCIA DE BAIXA):** `^BVSP` aos **{ibov_close:,.0f} pts** | "
+            f"**MM21:** {mm21:,.0f} • **MM50:** {mm50:,.0f} • **MM200:** {mm200:,.0f}. "
+            f"*Abaixo de todas as médias — tendência de baixa predominante; evitar compras de rompimento.*"
         )
     else:
         st.info("ℹ️ **M — Direção do Mercado (IBOV):** Dados históricos de 2 anos do `^BVSP` indisponíveis no momento.")
 
-    # 2. Placar dos 5 Critérios Específicos da Ação (C, A, N, S, L)
+    st.caption("📏 *Legenda: **MM21** = média de 21 pregões (~1 mês) | **MM50** = ~2,5 meses | **MM200** = ~10 meses.*")
+
+    # 2. Badge de Destaque do Veredito Operacional (Curto/Médio Prazo) + Popover de Legenda
+    if trade_verdict == "ENTRADA_FAVORAVEL":
+        v_bg = "rgba(16, 185, 129, 0.14)"
+        v_border = "#10b981"
+        v_text = "🟢 Sinal Favorável de Momentum — Ativo forte alinhado com a direção do mercado."
+    elif trade_verdict == "WATCHLIST":
+        v_bg = "rgba(245, 158, 11, 0.14)"
+        v_border = "#f59e0b"
+        v_text = "🟡 Líder em Observação (Watchlist) — Bons fundamentos/força, mas aguarde o IBOV superar a MM21 ou explosão de volume."
+    else:
+        v_bg = "rgba(239, 68, 68, 0.14)"
+        v_border = "#ef4444"
+        v_text = "🔴 Fora do Padrão Momentum — Baixo alinhamento técnico/fundamentalista no momento."
+
+    col_verdict, col_popover = st.columns([4.2, 1])
+    with col_verdict:
+        st.markdown(f"""
+        <div style="background: {v_bg}; border: 1px solid {v_border}; border-left: 5px solid {v_border};
+                    border-radius: 8px; padding: 10px 14px; margin: 4px 0 8px 0; font-size: 0.94rem; font-weight: 600; color: #f9fafb;">
+            🎯 <b>Veredito Operacional (Swing Trade / Momentum):</b> {v_text}
+        </div>
+        """, unsafe_allow_html=True)
+    with col_popover:
+        with st.popover("📖 Legenda dos Termos", use_container_width=True):
+            st.markdown("#### 📖 Glossário Rápido dos Indicadores")
+            st.markdown(
+                "- **MM21 / MM50 / MM200:** Médias Móveis de 21 pregões (~1 mês), 50 pregões (~2,5 meses) e 200 pregões (~10 meses). Preço acima da média indica força compradora no respectivo prazo.\n"
+                "- **YoY (Year-over-Year):** Comparação do resultado trimestral atual contra o mesmo trimestre do ano anterior (elimina efeitos sazonais).\n"
+                "- **CAGR:** Taxa de Crescimento Anual Composta dos lucros nos últimos anos disponíveis.\n"
+                "- **ROE (Return on Equity):** Retorno sobre o Patrimônio Líquido — mede a eficiência da empresa em gerar lucro com o capital próprio.\n"
+                "- **Volume Relativo (S):** Volume financeiro negociado comparado à média dos últimos 20 pregões (valores acima de 1,25x indicam entrada forte de compradores/institucionais).\n"
+                "- **Força Relativa / RS (L):** Desempenho percentual da ação comparado ao Ibovespa nos últimos 63 pregões (~3 meses)."
+            )
+
+    # 3. Placar dos 5 Critérios Específicos da Ação (C, A, N, S, L)
     details = canslim_data.get("criteria_details", [])
     strict_mode = canslim_data.get("strict_mode", False)
     mode_label = canslim_data.get("mode_label", "Estrito O'Neil" if strict_mode else "Calibrado B3")
@@ -92,7 +141,6 @@ def render_canslim_card(canslim_data: dict):
         sum(1 for i in stock_details if i.get("status") in ("approved", "rejected"))
     )
 
-    # Define cor de destaque conforme pontuação da ação (C-A-N-S-L)
     if stock_valid > 0 and (stock_score / stock_valid) >= 0.65:
         border_color = "#10b981"
         badge_bg = "rgba(16, 185, 129, 0.18)"
@@ -106,7 +154,6 @@ def render_canslim_card(canslim_data: dict):
         badge_bg = "rgba(239, 68, 68, 0.18)"
         status_label = "Baixo Alinhamento"
 
-    # Gera pílulas rápidas das 5 letras da ação (C, A, N, S, L) + M
     pills_html = ""
     for item in stock_details:
         st_code = item.get("status", "na")
@@ -131,7 +178,7 @@ def render_canslim_card(canslim_data: dict):
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(31, 41, 55, 0.7) 100%);
                 border: 1px solid #374151; border-left: 5px solid {border_color};
-                border-radius: 10px; padding: 14px 18px; margin: 6px 0 10px 0;">
+                border-radius: 10px; padding: 14px 18px; margin: 4px 0 10px 0;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <span style="font-size: 1.05rem; font-weight: 700; color: #ffffff;">
@@ -153,20 +200,20 @@ def render_canslim_card(canslim_data: dict):
     </div>
     """, unsafe_allow_html=True)
 
-    with st.expander(f"Ver detalhes dos critérios CAN SLM — Modo: {mode_label} (Metas & Indicadores)", expanded=False):
+    with st.expander(f"Ver detalhes dos critérios CAN SLM — Modo: {mode_label} (Metas, Indicadores & Glossário)", expanded=False):
         if strict_mode:
             st.caption(
                 "📘 **Modo Estrito Livro (O'Neil) Ativo:** "
                 "**C** (LPA Trim. YoY > 20%) • **A** (CAGR Anual > 25% E ROE ≥ 17%) • "
-                "**N** (Até 15% abaixo da Máx. 52s) • **S** (Pico Vol 5d ≥ 1.25x MM20 em dia de alta) • "
-                "**L** (Retorno 63 pregões / 3M > IBOV)."
+                "**N** (Até 15% abaixo da Máx. 52s + Preço > MMA21) • **S** (Pico Vol 5d ≥ 1.25x MM20 em dia de alta) • "
+                "**L** (Força Relativa / RS 63 pregões > IBOV)."
             )
         else:
             st.caption(
                 "🇧🇷 **Modo Calibrado B3 Ativo:** "
                 "**C** (LPA Trim. YoY > 12%) • **A** ((CAGR > 15% e ROE ≥ 14%) ou (ROE ≥ 17% e CAGR > 5%)) • "
-                "**N** (Até 20% abaixo da Máx. 52s) • **S** (Pico Vol 5d ≥ 1.25x MM20 em dia de alta) • "
-                "**L** (Retorno 63 pregões / 3M > IBOV)."
+                "**N** (Até 20% abaixo da Máx. 52s + Preço > MMA21) • **S** (Pico Vol 5d ≥ 1.25x MM20 em dia de alta) • "
+                "**L** (Força Relativa / RS 63 pregões > IBOV)."
             )
         cols = st.columns(2)
         for idx, item in enumerate(details):
@@ -199,6 +246,17 @@ def render_canslim_card(canslim_data: dict):
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("#### 📖 Glossário Rápido dos Indicadores")
+        st.markdown(
+            "- **MM21 / MM50 / MM200:** Médias Móveis de 21 pregões (~1 mês), 50 pregões (~2,5 meses) e 200 pregões (~10 meses). Preço acima da média indica força compradora no respectivo prazo.\n"
+            "- **YoY (Year-over-Year):** Comparação do resultado trimestral atual contra o mesmo trimestre do ano anterior (elimina efeitos sazonais).\n"
+            "- **CAGR:** Taxa de Crescimento Anual Composta dos lucros nos últimos anos disponíveis.\n"
+            "- **ROE (Return on Equity):** Retorno sobre o Patrimônio Líquido — mede a eficiência da empresa em gerar lucro com o capital próprio.\n"
+            "- **Volume Relativo (S):** Volume financeiro negociado comparado à média dos últimos 20 pregões (valores acima de 1,25x indicam entrada forte de compradores/institucionais).\n"
+            "- **Força Relativa / RS (L):** Desempenho percentual da ação comparado ao Ibovespa nos últimos 63 pregões (~3 meses)."
+        )
 
 
 def render_ai_card(ai_result: dict):

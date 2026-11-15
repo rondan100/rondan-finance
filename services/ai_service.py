@@ -68,18 +68,24 @@ def gerar_analise_cached(
     if not api_key or api_key == "sua_chave_aqui":
         raise Exception("Chave da API do Gemini (GEMINI_API_KEY) não configurada. Defina no arquivo .env ou na barra lateral.")
 
-    prompt = f"""Atue como analista sênior de renda variável da B3. Analise o ativo {ticker}.
-DADOS DE MERCADO: {dados_mercado_str}
-MANCHETES RECENTES:
+    prompt = f"""Atue como analista sênior de renda variável da B3 com foco em operações de CURTO e MÉDIO PRAZO (Swing Trade / Momentum).
+Analise o ativo {ticker} considerando:
+1. DADOS TÉCNICOS, CAN SLM E REGIME DO IBOVESPA (MM21, MM50, MM200 e Veredito Swing Trade):
+{dados_mercado_str}
+2. MANCHETES RECENTES (avalie se servem como catalisador de curto prazo):
 {titulos_noticias_str}
+
+Diretrizes:
+- Respeite o regime atual do Ibovespa (MM21, MM50 e MM200) e o Veredito Operacional CAN SLM.
+- Foque no horizonte de curto/médio prazo (momentum, suporte na MMA21, volume relativo e força relativa vs IBOV).
 
 Retorne OBRIGATORIAMENTE e EXCLUSIVAMENTE um objeto JSON estrito com o seguinte esquema:
 {{
   "tendencia": "ALTA" | "BAIXA" | "NEUTRA",
   "confianca_pct": 80,
-  "resumo_executivo": "Texto direto em 2 frases sobre o panorama do ativo.",
-  "principais_motivos": ["Motivo 1", "Motivo 2", "Motivo 3"],
-  "variaveis_chave": ["Variável Macro 1", "Variável Macro 2", "Variável Macro 3"]
+  "resumo_executivo": "Texto direto em 2 frases sobre o panorama de curto/médio prazo (swing trade/momentum) e catalisadores do ativo.",
+  "principais_motivos": ["Motivo técnico/CAN SLM 1", "Catalisador de notícias/momentum 2", "Alinhamento com o regime do IBOV (MM21/50/200) 3"],
+  "variaveis_chave": ["Variável Macro/Setorial 1", "Gatilho de Curto Prazo 2", "Risco/Suporte Técnico 3"]
 }}
 """
 
@@ -226,9 +232,9 @@ def stream_ia_sobre_ativo(
     except Exception:
         client = genai.Client(api_key=api_key)
 
-    # Prompt ultraconciso: resposta em ~80 palavras focada apenas no essencial
-    prompt = f"""Você é um analista sênior da B3.
-Responda diretamente e com máxima objetividade em no máximo 3 tópicos curtos (máx 90 palavras):
+    # Prompt ultraconciso: resposta em ~80 palavras focada em curto/médio prazo (swing trade / momentum)
+    prompt = f"""Você é um analista sênior da B3 focado em curto e médio prazo (swing trade / momentum).
+Responda diretamente e com máxima objetividade em no máximo 3 tópicos curtos (máx 90 palavras), considerando o regime do IBOV (MM21/50/200), o CAN SLM e se as notícias atuam como catalisador de curto prazo:
 Pergunta: "{pergunta_usuario}"
 Contexto: {dados_mercado_str} | {tendencia_atual_str} | Notícias: {titulos_noticias_str}
 """
@@ -303,20 +309,20 @@ def consultar_ia_sobre_ativo(
     except Exception:
         client = genai.Client(api_key=api_key)
 
-    # Prompt sintetizado e cirúrgico para respostas rápidas
-    prompt = f"""Você é um analista sênior de renda variável da B3.
+    # Prompt sintetizado e cirúrgico para respostas rápidas focadas em swing trade / momentum
+    prompt = f"""Você é um analista sênior de renda variável da B3 focado em operações de curto e médio prazo (swing trade / momentum).
 Responda diretamente e com máxima objetividade à pergunta do investidor sobre {ticker} ({company_name}):
 
 PERGUNTA: "{pergunta_usuario}"
 
 CONTEXTO ATUAL:
-- Mercado/Gráfico: {dados_mercado_str}
+- Mercado/Gráfico/CAN SLM: {dados_mercado_str}
 - {tendencia_atual_str}
 - Notícias: {titulos_noticias_str}
 
 DIRETRIZES:
 1. Vá direto ao ponto em no máximo 3 tópicos curtos e objetivos (máximo 120 palavras).
-2. Relacione a resposta com o momento do gráfico (médias) e notícias.
+2. Avalie se as notícias recentes servem como catalisador de curto prazo e respeite o regime atual do Ibovespa (MM21, MM50 e MM200).
 3. Sem preâmbulos, cumprimentos ou conclusões genéricas.
 """
 

@@ -180,9 +180,14 @@ ibov_data = fetch_ibov_data()
 render_top_metrics(metrics, ticker_normalized, period_selected)
 
 modo_canslim = st.radio(
-    "Perfil de Rigor CAN SLM:",
+    "Perfil de Rigor CAN SLM (Foco Swing Trade / Momentum):",
     ["Calibrado B3", "Estrito Livro (O'Neil)"],
-    horizontal=True
+    horizontal=True,
+    help=(
+        "Calibrado B3: Ajusta os limiares fundamentalistas (LPA YoY > 12%, CAGR > 15% + ROE >= 14% ou ROE >= 17%, Topo 52s <= 20%) "
+        "à realidade das empresas brasileiras.\n\n"
+        "Estrito Livro (O'Neil): Usa as réguas originais de William O'Neil (LPA YoY > 20%, CAGR > 25% + ROE >= 17%, Topo 52s <= 15%)."
+    )
 )
 strict_mode_canslim = (modo_canslim == "Estrito Livro (O'Neil)")
 
@@ -262,7 +267,7 @@ current_analysis = st.session_state["ai_analysis_data"].get(analysis_key)
 # ==============================================================================
 # SEÇÃO DO MOTOR DE IA (GOOGLE GEMINI - DISPARO POR BOTÃO)
 # ==============================================================================
-st.subheader("🤖 Diagnóstico de IA | Tendência de Mercado")
+st.subheader("🤖 Diagnóstico de IA | Swing Trade & Momentum (Curto/Médio Prazo)")
 
 if not active_api_key or active_api_key == "sua_chave_aqui":
     st.info("💡 **Dica:** Para ativar a análise preditiva por Inteligência Artificial, informe sua **GEMINI_API_KEY** no arquivo `.env` ou insira-a no campo correspondente na barra lateral.")

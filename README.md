@@ -90,16 +90,17 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 <summary><b>🔍 Detalhes das Alterações por Versão</b></summary>
 
 ### [`v1.5.0`] — Atual
-- **Adicionado:** **Análise Quantitativa CAN SLM com Duplo Perfil de Rigor (`Calibrado B3` vs `Estrito Livro O'Neil`)** em `services/market_data.py`:
-  - **M (Market Direction — Peso Principal via `^BVSP` `2y`):** Calcula **MM50** e **MM200** sobre 2 anos do Ibovespa (`fetch_ibov_data()` cacheado por 1h) e classifica o regime em `ALTA` (`^BVSP > MM50 e MM200`), `ATENCAO` (entre `MM50` e `MM200`) ou `BAIXA` (`^BVSP < MM50 e MM200`), exibido em banner de destaque no topo do card.
+- **Adicionado:** **Análise Quantitativa CAN SLM Focada em Swing Trade / Momentum (`Calibrado B3` vs `Estrito Livro O'Neil`)** em `services/market_data.py`:
+  - **M (Market Direction — Peso Principal via `^BVSP` `2y`):** Calcula **MM21** (curto prazo / ~1 mês), **MM50** (médio prazo / ~2,5 meses) e **MM200** (longo prazo / ~10 meses) do Ibovespa e classifica em 4 estados objetivos: `ALTA_FORTE`, `RETOMADA_CURTO`, `CAUTELA` e `BAIXA`.
+  - **Veredito Operacional (`trade_verdict`):** Cruza o regime do `^BVSP` com o score da ação (0 a 5) para classificar em `ENTRADA_FAVORAVEL`, `WATCHLIST` ou `EVITAR`.
   - **C (Current Earnings):** Crescimento trimestral do lucro/LPA YoY $> 12\%$ no modo **Calibrado B3** ou $> 20\%$ no modo **Estrito O'Neil**.
   - **A (Annual Earnings):** No modo **Estrito O'Neil**, exige `CAGR Anual > 25%` E `ROE >= 17%`; no modo **Calibrado B3**, aprova com `(CAGR > 15% e ROE >= 14%)` OU `(ROE >= 17% e CAGR > 5%)`.
-  - **N (New High):** Proximidade da máxima de 52 semanas (`>= 0.80` / até 20% abaixo do topo no **Calibrado B3**, ou `>= 0.85` / até 15% no **Estrito O'Neil**).
+  - **N (New High & Momentum):** Proximidade da máxima de 52 semanas (`>= 0.80` no **Calibrado B3** ou `>= 0.85` no **Estrito O'Neil**) **combinada com `Preço > MMA21`** do próprio ativo.
   - **S (Supply & Demand — Janela de 5 pregões):** Analisa os últimos 5 pregões e aprova se houver pelo menos 1 pregão de alta (`Close > Open` ou `Close > PrevClose`) com `Volume >= 1.25x` a média móvel de volume de 20 dias (`Pico Vol 5d`).
   - **L (Leader or Laggard — Janela fixa de 63 pregões / 3M):** Compara a variação percentual do ativo contra o `^BVSP` nos últimos 63 pregões (~3 meses), invariante ao período selecionado no gráfico.
-- **Adicionado:** Seletor rápido `Perfil de Rigor CAN SLM` (`Calibrado B3` / `Estrito Livro (O'Neil)`) e componente visual responsivo `render_canslim_card` em `ui/components.py` com banner do Regime de Mercado (**M**) no topo, placar dos 5 critérios da ação (**C-A-N-S-L**) e detalhamento expansível (`✅`, `⚠️`, `➖ N/D`).
-- **Adicionado:** Integração do **Score Quantitativo CAN SLM (`C-A-N-S-L`) no Radar B3** (`scan_b3_market_opportunities` em paralelo via `ThreadPoolExecutor` e `render_scanner_results`), adicionando a aba `🏆 Top Score CAN SLM`, pílulas visuais de critérios por ativo e ranqueamento híbrido (Técnico + CAN SLM).
-- **Otimizado:** Injeção compacta da `summary_line` do CAN SLM dentro de `metrics["summary_line"]` para enriquecer o diagnóstico do Gemini com impacto mínimo de tokens.
+- **Adicionado:** **Tooltips (`help=`), Legendas e Glossário Completo (`📖 Legenda dos Termos` via `st.popover` e expander)** em `ui/components.py`, explicando `MM21/50/200`, `YoY`, `CAGR`, `ROE`, `Volume Relativo` e `Força Relativa (RS)`.
+- **Adicionado:** Integração do **Score Quantitativo CAN SLM (`C-A-N-S-L`) no Radar B3** (`scan_b3_market_opportunities` em paralelo via `ThreadPoolExecutor` e `render_scanner_results`), adicionando a aba `🏆 Top Score CAN SLM`, pílulas visuais de critérios por ativo e atualização instantânea ao alternar o perfil de rigor.
+- **Otimizado:** Prompt do Gemini em `services/ai_service.py` calibrado para **curto e médio prazo (swing trade / momentum)**, avaliando catalisadores de notícias e respeitando `MM21`, `MM50`, `MM200` do Ibovespa e o `trade_verdict`.
 
 ### [`v1.4.1`]
 - **Adicionado:** **Ativos Clicáveis no Radar B3**: Botão "📊 Analisar" em cada card de oportunidade, permitindo carregar o ativo instantaneamente no Dashboard principal com sincronização automática do seletor da barra lateral.

@@ -329,13 +329,21 @@ def calculate_canslim_metrics(
     })
 
     # --------------------------------------------------------------------------
-    # N - New High (Proximidade da máxima de 52 semanas)
+    # N - New High (Proximidade da máxima de 52s + Preço > MMA21 no curto prazo)
     # --------------------------------------------------------------------------
     n_threshold = 0.85 if strict_mode else 0.80
     n_max_dist_str = "15%" if strict_mode else "20%"
 
     if hist_data is not None and not hist_data.empty:
         current_price = float(hist_data['Close'].iloc[-1])
+        if 'SMA21' in hist_data.columns and pd.notna(hist_data['SMA21'].iloc[-1]):
+            sma21_asset = float(hist_data['SMA21'].iloc[-1])
+        else:
+            sma21_asset = float(hist_data['Close'].tail(21).mean())
+
+        above_sma21 = current_price > sma21_asset
+        sma21_tag = "Acima MMA21" if above_sma21 else "Abaixo MMA21"
+
         high_52w = info.get("fiftyTwoWeekHigh")
         if high_52w is None or pd.isna(high_52w) or float(high_52w) <= 0:
             high_52w = float(hist_data['High'].max())
@@ -345,14 +353,25 @@ def calculate_canslim_metrics(
         if high_52w > 0:
             ratio_high = current_price / high_52w
             dist_high_pct = (ratio_high - 1.0) * 100.0
-            n_status = "approved" if ratio_high >= n_threshold else "rejected"
-            n_val = f"{dist_high_pct:+.1f}% (Topo: R$ {high_52w:.2f})"
-            n_desc = (
-                f"Aprovado ({mode_tag}): Negociando a {abs(dist_high_pct):.1f}% da máxima de 52s (Meta <= {n_max_dist_str} abaixo do topo)."
-                if n_status == "approved"
-                else f"Abaixo da meta ({mode_tag}): Distante {abs(dist_high_pct):.1f}% da máxima de 52s (Meta <= {n_max_dist_str} abaixo do topo)."
-            )
-            short_parts.append(f"Dist. Máx 52s: {dist_high_pct:+.1f}%")
+            near_high = ratio_high >= n_threshold
+            n_status = "approved" if (near_high and above_sma21) else "rejected"
+            n_val = f"{dist_high_pct:+.1f}% Topo | {sma21_tag}"
+            if n_status == "approved":
+                n_desc = (
+                    f"Aprovado ({mode_tag}): A {abs(dist_high_pct):.1f}% da máxima de 52s (Meta <= {n_max_dist_str}) "
+                    f"e Preço (R$ {current_price:.2f}) > MMA21 (R$ {sma21_asset:.2f}), confirmando tendência de alta no curto prazo."
+                )
+            elif near_high and not above_sma21:
+                n_desc = (
+                    f"Atenção Curto Prazo: Próximo à máxima de 52s ({dist_high_pct:+.1f}%), mas Preço (R$ {current_price:.2f}) "
+                    f"perdeu a MMA21 (R$ {sma21_asset:.2f}). Aguardar retomar a MMA21."
+                )
+            else:
+                n_desc = (
+                    f"Abaixo da meta ({mode_tag}): Distante {abs(dist_high_pct):.1f}% do topo de 52s (Meta <= {n_max_dist_str}) "
+                    f"| {sma21_tag} (MMA21: R$ {sma21_asset:.2f})."
+                )
+            short_parts.append(f"Dist. Máx 52s: {dist_high_pct:+.1f}% ({sma21_tag})")
         else:
             n_status, n_val, n_desc = "na", "N/D", "Máxima de 52 semanas indisponível."
             short_parts.append("Dist. Máx 52s: N/D")
@@ -362,7 +381,7 @@ def calculate_canslim_metrics(
 
     criteria_details.append({
         "letter": "N",
-        "name": f"New High (Proximidade Topo 52s <= {n_max_dist_str})",
+        "name": f"New High & Momentum (Topo 52s <= {n_max_dist_str} + Preço > MMA21)",
         "status": n_status,
         "value": n_val,
         "description": n_desc
@@ -433,7 +452,6 @@ def calculate_canslim_metrics(
     # --------------------------------------------------------------------------
     if hist_data is not None and len(hist_data) >= 2 and ibov_hist is not None and len(ibov_hist) >= 2:
         try:
-            # Retorno de 63 pregões (~3 meses) do ativo (usa _asset_ret_63d_pct se o gráfico atual tiver < 63 barras)
             if len(hist_data) >= 63:
                 asset_start_3m = float(hist_data['Close'].iloc[-63])
                 asset_end_3m = float(hist_data['Close'].iloc[-1])
@@ -445,7 +463,6 @@ def calculate_canslim_metrics(
                 asset_end_3m = float(hist_data['Close'].iloc[-1])
                 var_ativo_3m = ((asset_end_3m / asset_start_3m) - 1.0) * 100.0 if asset_start_3m > 0 else 0.0
 
-            # Retorno de 63 pregões (~3 meses) do ^BVSP
             win_ibov_3m = min(63, len(ibov_hist))
             ibov_start_3m = float(ibov_hist['Close'].iloc[-win_ibov_3m])
             ibov_end_3m = float(ibov_hist['Close'].iloc[-1])
@@ -456,9 +473,9 @@ def calculate_canslim_metrics(
             l_status = "approved" if var_ativo_3m > var_ibov_3m else "rejected"
             l_val = f"{diff_ibov_3m:+.1f}% vs IBOV 3M ({var_ativo_3m:+.1f}% vs {var_ibov_3m:+.1f}%)"
             l_desc = (
-                f"Ativo líder: superou o Ibovespa na janela fixa de 63 pregões / 3 meses ({var_ativo_3m:+.1f}% vs {var_ibov_3m:+.1f}%)."
+                f"Ativo líder (RS positiva): superou o Ibovespa na janela fixa de 63 pregões / 3 meses ({var_ativo_3m:+.1f}% vs {var_ibov_3m:+.1f}%)."
                 if l_status == "approved"
-                else f"Abaixo do índice: performance inferior ao Ibovespa nos últimos 63 pregões / 3 meses ({var_ativo_3m:+.1f}% vs {var_ibov_3m:+.1f}%)."
+                else f"Abaixo do índice (RS negativa): performance inferior ao Ibovespa nos últimos 63 pregões / 3 meses ({var_ativo_3m:+.1f}% vs {var_ibov_3m:+.1f}%)."
             )
             short_parts.append(f"vs IBOV 3M: {diff_ibov_3m:+.1f}%")
         except Exception:
@@ -470,7 +487,7 @@ def calculate_canslim_metrics(
 
     criteria_details.append({
         "letter": "L",
-        "name": "Leader or Laggard (Força Relativa 3M / 63d vs IBOV)",
+        "name": "Leader or Laggard (Força Relativa / RS 3M vs IBOV)",
         "status": l_status,
         "value": l_val,
         "description": l_desc
@@ -481,11 +498,12 @@ def calculate_canslim_metrics(
     stock_valid_criteria = sum(1 for item in criteria_details if item["status"] in ("approved", "rejected"))
 
     # --------------------------------------------------------------------------
-    # M - Market Direction (Peso Principal via ^BVSP: MM50 e MM200 sobre 2y)
+    # M - Market Direction (Peso Principal via ^BVSP: MM21, MM50 e MM200 sobre 2y)
     # --------------------------------------------------------------------------
     market_regime = {
         "status": "ND",
         "ibov_close": None,
+        "mm21": None,
         "mm50": None,
         "mm200": None,
         "approved": False
@@ -494,47 +512,62 @@ def calculate_canslim_metrics(
     if ibov_hist is not None and not ibov_hist.empty and len(ibov_hist) >= 50:
         try:
             ibov_close = float(ibov_hist['Close'].iloc[-1])
+            mm21_ibov = float(ibov_hist['Close'].rolling(window=21).mean().iloc[-1])
             mm50_ibov = float(ibov_hist['Close'].rolling(window=50).mean().iloc[-1])
             win_200 = min(200, len(ibov_hist))
             mm200_ibov = float(ibov_hist['Close'].rolling(window=win_200).mean().iloc[-1])
 
-            if ibov_close > mm50_ibov and ibov_close > mm200_ibov:
-                regime_status = "ALTA"
+            above_21 = ibov_close > mm21_ibov
+            above_50 = ibov_close > mm50_ibov
+            above_200 = ibov_close > mm200_ibov
+
+            if above_21 and above_50 and above_200:
+                regime_status = "ALTA_FORTE"
                 m_status = "approved"
-                regime_summary = "ALTA (acima MM50 e MM200)"
-                m_val = f"ALTA ({ibov_close:,.0f} pts)"
+                regime_summary = f"ALTA_FORTE (IBOV {ibov_close:,.0f} > MM21 {mm21_ibov:,.0f}, MM50 {mm50_ibov:,.0f}, MM200 {mm200_ibov:,.0f})"
+                m_val = f"ALTA FORTE ({ibov_close:,.0f} pts)"
                 m_desc = (
-                    f"Mercado: o mais importante. ^BVSP ({ibov_close:,.0f} pts) opera acima da MM50 ({mm50_ibov:,.0f}) "
-                    f"e da MM200 ({mm200_ibov:,.0f}). Tendência primária e secundária de alta."
+                    f"Tendência alinhada em todos os prazos: ^BVSP ({ibov_close:,.0f} pts) acima da MM21 ({mm21_ibov:,.0f}), "
+                    f"MM50 ({mm50_ibov:,.0f}) e MM200 ({mm200_ibov:,.0f}). Cenário ideal para swing trade e rompimentos."
                 )
-            elif ibov_close < mm50_ibov and ibov_close < mm200_ibov:
-                regime_status = "BAIXA"
-                m_status = "rejected"
-                regime_summary = "BAIXA (abaixo MM50 e MM200)"
-                m_val = f"BAIXA ({ibov_close:,.0f} pts)"
+            elif above_21 and (not above_50 or not above_200):
+                regime_status = "RETOMADA_CURTO"
+                m_status = "approved"
+                regime_summary = f"RETOMADA_CURTO (IBOV {ibov_close:,.0f} > MM21 {mm21_ibov:,.0f}, abaixo MM50/200)"
+                m_val = f"RETOMADA CURTO ({ibov_close:,.0f} pts)"
                 m_desc = (
-                    f"Mercado: o mais importante. ^BVSP ({ibov_close:,.0f} pts) opera abaixo da MM50 ({mm50_ibov:,.0f}) "
-                    f"e da MM200 ({mm200_ibov:,.0f}). Risco elevado — 3 de cada 4 ações caem junto com o índice."
+                    f"Início de reversão no curto prazo: ^BVSP ({ibov_close:,.0f} pts) acima da MM21 ({mm21_ibov:,.0f}), "
+                    f"mas testando MM50 ({mm50_ibov:,.0f}) / MM200 ({mm200_ibov:,.0f}). Permite operações táticas com stop ajustado."
+                )
+            elif (not above_21) and (above_50 or above_200):
+                regime_status = "CAUTELA"
+                m_status = "rejected"
+                regime_summary = f"CAUTELA (IBOV {ibov_close:,.0f} < MM21 {mm21_ibov:,.0f}, acima MM50/200)"
+                m_val = f"CAUTELA / CORREÇÃO ({ibov_close:,.0f} pts)"
+                m_desc = (
+                    f"Correção curta dentro de tendência maior: ^BVSP ({ibov_close:,.0f} pts) abaixo da MM21 ({mm21_ibov:,.0f}), "
+                    f"porém sustentado pela MM50 ({mm50_ibov:,.0f}) / MM200 ({mm200_ibov:,.0f}). Aguardar retomar a MM21."
                 )
             else:
-                regime_status = "ATENCAO"
+                regime_status = "BAIXA"
                 m_status = "rejected"
-                regime_summary = "ATENCAO (entre MM50 e MM200)"
-                m_val = f"ATENÇÃO ({ibov_close:,.0f} pts)"
+                regime_summary = f"BAIXA (IBOV {ibov_close:,.0f} < MM21 {mm21_ibov:,.0f}, MM50 {mm50_ibov:,.0f}, MM200 {mm200_ibov:,.0f})"
+                m_val = f"BAIXA ({ibov_close:,.0f} pts)"
                 m_desc = (
-                    f"Mercado em transição/cautela: ^BVSP ({ibov_close:,.0f} pts) entre a MM50 ({mm50_ibov:,.0f}) "
-                    f"e a MM200 ({mm200_ibov:,.0f}). Exige seletividade redobrada."
+                    f"Tendência de baixa predominante: ^BVSP ({ibov_close:,.0f} pts) abaixo da MM21 ({mm21_ibov:,.0f}), "
+                    f"MM50 ({mm50_ibov:,.0f}) e MM200 ({mm200_ibov:,.0f}). Evitar compras de rompimento."
                 )
 
             market_regime = {
                 "status": regime_status,
                 "ibov_close": ibov_close,
+                "mm21": mm21_ibov,
                 "mm50": mm50_ibov,
                 "mm200": mm200_ibov,
-                "approved": regime_status == "ALTA"
+                "approved": regime_status in ("ALTA_FORTE", "RETOMADA_CURTO")
             }
         except Exception:
-            m_status, m_val, m_desc = "na", "N/D", "Falha ao calcular MM50 e MM200 do ^BVSP."
+            m_status, m_val, m_desc = "na", "N/D", "Falha ao calcular MM21, MM50 e MM200 do ^BVSP."
             regime_summary = "N/D"
     else:
         m_status, m_val, m_desc = "na", "N/D", "Dados históricos de 2 anos do ^BVSP indisponíveis."
@@ -542,17 +575,33 @@ def calculate_canslim_metrics(
 
     criteria_details.append({
         "letter": "M",
-        "name": "Market Direction (Regime IBOV: MM50 & MM200)",
+        "name": "Market Direction (Regime IBOV: MM21, MM50 & MM200)",
         "status": m_status,
         "value": m_val,
         "description": m_desc
     })
+
+    # --------------------------------------------------------------------------
+    # Veredito Operacional (Swing Trade / Momentum) cruzando M + Score (0 a 5)
+    # --------------------------------------------------------------------------
+    reg_st = market_regime.get("status", "ND")
+    if (
+        reg_st in ("ALTA_FORTE", "RETOMADA_CURTO")
+        and stock_score >= 4
+        and (s_status == "approved" or n_status == "approved")
+    ):
+        trade_verdict = "ENTRADA_FAVORAVEL"
+    elif stock_score >= 3:
+        trade_verdict = "WATCHLIST"
+    else:
+        trade_verdict = "EVITAR"
 
     score = sum(1 for item in criteria_details if item["status"] == "approved")
     valid_criteria = sum(1 for item in criteria_details if item["status"] in ("approved", "rejected"))
 
     summary_line = (
         f"Regime Mercado (IBOV): {regime_summary} | "
+        f"Veredito Swing Trade: {trade_verdict} | "
         f"Score Ativo ({mode_tag} C-A-N-S-L): {stock_score}/{stock_valid_criteria} | "
         + " | ".join(short_parts)
     )
@@ -565,6 +614,7 @@ def calculate_canslim_metrics(
         "strict_mode": strict_mode,
         "mode_label": mode_tag,
         "market_regime": market_regime,
+        "trade_verdict": trade_verdict,
         "criteria_details": criteria_details,
         "summary_line": summary_line
     }
@@ -797,6 +847,7 @@ def scan_b3_market_opportunities(
                 "canslim_details": cs_details,
                 "strict_mode": strict_mode,
                 "mode_label": mode_tag,
+                "trade_verdict": canslim.get("trade_verdict", "EVITAR"),
                 "market_regime": canslim.get("market_regime", {})
             })
         except Exception:
