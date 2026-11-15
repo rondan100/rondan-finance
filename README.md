@@ -98,7 +98,7 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
   - **N (New High & Momentum):** Proximidade da máxima de 52 semanas (`>= 0.80` no **Calibrado B3** ou `>= 0.85` no **Estrito O'Neil**) **combinada com `Preço > MMA21`** do próprio ativo.
   - **S (Supply & Demand — Janela de 5 pregões):** Analisa os últimos 5 pregões e aprova se houver pelo menos 1 pregão de alta (`Close > Open` ou `Close > PrevClose`) com `Volume >= 1.25x` a média móvel de volume de 20 dias (`Pico Vol 5d`).
   - **L (Leader or Laggard — Janela fixa de 63 pregões / 3M):** Compara a variação percentual do ativo contra o `^BVSP` nos últimos 63 pregões (~3 meses), invariante ao período selecionado no gráfico.
-- **Adicionado:** **Tooltips (`help=`), Legendas e Glossário Completo (`📖 Legenda dos Termos` via `st.popover` e expander)** em `ui/components.py`, explicando `MM21/50/200`, `YoY`, `CAGR`, `ROE`, `Volume Relativo` e `Força Relativa (RS)`.
+- **Adicionado:** **Tooltips (`help=`), Legendas e Glossário Rápido dos Indicadores** na aba expansível de detalhes em `ui/components.py`, explicando `MM21/50/200`, `YoY`, `CAGR`, `ROE`, `Volume Relativo` e `Força Relativa (RS)`.
 - **Adicionado:** Integração do **Score Quantitativo CAN SLM (`C-A-N-S-L`) no Radar B3** (`scan_b3_market_opportunities` em paralelo via `ThreadPoolExecutor` e `render_scanner_results`), adicionando a aba `🏆 Top Score CAN SLM`, pílulas visuais de critérios por ativo e atualização instantânea ao alternar o perfil de rigor.
 - **Otimizado:** Prompt do Gemini em `services/ai_service.py` calibrado para **curto e médio prazo (swing trade / momentum)**, avaliando catalisadores de notícias e respeitando `MM21`, `MM50`, `MM200` do Ibovespa e o `trade_verdict`.
 

@@ -96,7 +96,7 @@ def render_canslim_card(canslim_data: dict):
 
     st.caption("📏 *Legenda: **MM21** = média de 21 pregões (~1 mês) | **MM50** = ~2,5 meses | **MM200** = ~10 meses.*")
 
-    # 2. Badge de Destaque do Veredito Operacional (Curto/Médio Prazo) + Popover de Legenda
+    # 2. Badge de Destaque do Veredito Operacional (Curto/Médio Prazo)
     if trade_verdict == "ENTRADA_FAVORAVEL":
         v_bg = "rgba(16, 185, 129, 0.14)"
         v_border = "#10b981"
@@ -110,25 +110,12 @@ def render_canslim_card(canslim_data: dict):
         v_border = "#ef4444"
         v_text = "🔴 Fora do Padrão Momentum — Baixo alinhamento técnico/fundamentalista no momento."
 
-    col_verdict, col_popover = st.columns([4.2, 1])
-    with col_verdict:
-        st.markdown(f"""
-        <div style="background: {v_bg}; border: 1px solid {v_border}; border-left: 5px solid {v_border};
-                    border-radius: 8px; padding: 10px 14px; margin: 4px 0 8px 0; font-size: 0.94rem; font-weight: 600; color: #f9fafb;">
-            🎯 <b>Veredito Operacional (Swing Trade / Momentum):</b> {v_text}
-        </div>
-        """, unsafe_allow_html=True)
-    with col_popover:
-        with st.popover("📖 Legenda dos Termos", use_container_width=True):
-            st.markdown("#### 📖 Glossário Rápido dos Indicadores")
-            st.markdown(
-                "- **MM21 / MM50 / MM200:** Médias Móveis de 21 pregões (~1 mês), 50 pregões (~2,5 meses) e 200 pregões (~10 meses). Preço acima da média indica força compradora no respectivo prazo.\n"
-                "- **YoY (Year-over-Year):** Comparação do resultado trimestral atual contra o mesmo trimestre do ano anterior (elimina efeitos sazonais).\n"
-                "- **CAGR:** Taxa de Crescimento Anual Composta dos lucros nos últimos anos disponíveis.\n"
-                "- **ROE (Return on Equity):** Retorno sobre o Patrimônio Líquido — mede a eficiência da empresa em gerar lucro com o capital próprio.\n"
-                "- **Volume Relativo (S):** Volume financeiro negociado comparado à média dos últimos 20 pregões (valores acima de 1,25x indicam entrada forte de compradores/institucionais).\n"
-                "- **Força Relativa / RS (L):** Desempenho percentual da ação comparado ao Ibovespa nos últimos 63 pregões (~3 meses)."
-            )
+    st.markdown(f"""
+    <div style="background: {v_bg}; border: 1px solid {v_border}; border-left: 5px solid {v_border};
+                border-radius: 8px; padding: 10px 14px; margin: 4px 0 8px 0; font-size: 0.94rem; font-weight: 600; color: #f9fafb;">
+        🎯 <b>Veredito Operacional (Swing Trade / Momentum):</b> {v_text}
+    </div>
+    """, unsafe_allow_html=True)
 
     # 3. Placar dos 5 Critérios Específicos da Ação (C, A, N, S, L)
     details = canslim_data.get("criteria_details", [])
