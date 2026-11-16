@@ -29,7 +29,8 @@ rondan-finance/
 │   ├── charts.py            # Construção do gráfico Candlestick interativo (Plotly)
 │   └── components.py        # Métricas, cards dinâmicos de IA, colunas e notícias
 │
-└── app.py                   # Ponto de entrada (Main), orquestrador do Streamlit
+├── app.py                   # Ponto de entrada (Main), orquestrador do Dashboard B3 + IA
+└── options_app.py           # Simulador Visual Independente de Opções B3 (Call & Put)
 ```
 
 ---
@@ -78,7 +79,9 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 
 | Versão | Data | Status | Tipo | Destaques Principais |
 | :---: | :---: | :---: | :---: | :--- |
-| **`v1.5.0`** | `Nov/2026` | 🟢 **Atual** | `MINOR` | Checklist quantitativo **CAN SLM** adaptado para a B3, força relativa vs Ibovespa (`^BVSP`) e integração enxuta no prompt da IA |
+| **`v1.6.1`** | `Nov/2026` | 🟢 **Atual** | `PATCH` | Glossário detalhado e contextualizado em tempo real no `options_app.py` (Valor Intrínseco/Extrínseco, Theta, ITM/ATM/OTM e Exercício vs Pó) |
+| **`v1.6.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Aplicativo independente **`options_app.py`** — Simulador Visual de Opções B3 (Call & Put), Black-Scholes e zonas de lucro/prejuízo |
+| **`v1.5.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Checklist quantitativo **CAN SLM** focado em Swing Trade/Momentum (`MM21/50/200`), Radar B3 híbrido e glossário técnico |
 | **`v1.4.1`** | `Nov/2026` | ⚪ Estável | `PATCH` | Streaming em tempo real (resposta em ~300ms), corte de tokens, ativos clicáveis no Radar B3 e disparo direto |
 | **`v1.4.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Suporte ao Google AI Pro (modelos Pro e `argon`), barra de pesquisa/chat com IA contextualizada com gráfico e notícias |
 | **`v1.3.0`** | `Nov/2026` | ⚪ Estável | `MINOR` | Radar B3 (Scanner de oportunidades/compra), Cotação de hoje no Candlestick e correção de candles zerados |
@@ -89,7 +92,21 @@ O projeto adota o padrão **Semantic Versioning 2.0** (`v{MAJOR}.{MINOR}.{PATCH}
 <details open>
 <summary><b>🔍 Detalhes das Alterações por Versão</b></summary>
 
-### [`v1.5.0`] — Atual
+### [`v1.6.1`] — Atual
+- **Adicionado:** **Glossário Detalhado e Contextualizado em Tempo Real** em [`options_app.py`](file:///d:/Desenv/Workspaces/WSPOCs/rondan-finance/options_app.py):
+  - Explica dinamicamente os conceitos com base nos parâmetros exatos escolhidos pelo usuário (Ativo, Call/Put, Titular/Lançador, Strike, Prêmio, Quantidade, Prazo e Preço Simulado).
+  - Calcula e decompõe o prêmio em **Valor Intrínseco** (valor real de exercício imediato) e **Valor Extrínseco / Tempo (Efeito Theta)**.
+  - Indica automaticamente se, no preço simulado do slider, a opção **dá Exercício (ITM)** ou **"Vira Pó" (expira sem valor — OTM/ATM)**, além de comparar o prêmio configurado contra o preço justo de **Black-Scholes**.
+
+### [`v1.6.0`]
+- **Adicionado:** **Simulador Visual de Opções de Ações da B3 (`options_app.py`)** como aplicativo Streamlit independente (`streamlit run options_app.py`):
+  - Reaproveitamento da lista de 44 ativos (`PopularB3Asset`) e coleta sanitizada do `yfinance` (`services/market_data.py`), com cálculo automático da **volatilidade histórica anualizada** (`std() * √252`).
+  - Simulação completa das 4 pontas operacionais: **Compra de Call (Titular)**, **Venda de Call (Lançador)**, **Compra de Put (Titular)** e **Venda de Put (Lançador)**.
+  - Precificação teórica justa via modelo **Black-Scholes** nativo (`math.erf`, sem dependência de `scipy`, taxa livre de risco `11,25% a.a.`) com edição livre do prêmio e botão de recalibragem rápida.
+  - **Slider interativo de preço no vencimento** (`-30%` a `+30%`) calculando em tempo real **Breakeven (Ponto de Empate)**, **Custo/Crédito Total**, **Resultado Financeiro (R$ e %)**, **Lucro Máximo** e **Risco Máximo**.
+  - **Gráfico Candlestick + Janela de Projeção até o Vencimento** com linhas verticais (`Hoje` e `Vencimento`), linhas de `Strike` e `Breakeven`, e faixas horizontais (`add_hrect`) **Verde (Zona de Lucro)** e **Vermelha (Zona de Prejuízo)**.
+
+### [`v1.5.0`]
 - **Adicionado:** **Análise Quantitativa CAN SLM Focada em Swing Trade / Momentum (`Calibrado B3` vs `Estrito Livro O'Neil`)** em `services/market_data.py`:
   - **M (Market Direction — Peso Principal via `^BVSP` `2y`):** Calcula **MM21** (curto prazo / ~1 mês), **MM50** (médio prazo / ~2,5 meses) e **MM200** (longo prazo / ~10 meses) do Ibovespa e classifica em 4 estados objetivos: `ALTA_FORTE`, `RETOMADA_CURTO`, `CAUTELA` e `BAIXA`.
   - **Veredito Operacional (`trade_verdict`):** Cruza o regime do `^BVSP` com o score da ação (0 a 5) para classificar em `ENTRADA_FAVORAVEL`, `WATCHLIST` ou `EVITAR`.
@@ -169,8 +186,12 @@ Obtenha sua chave no [Google AI Studio](https://aistudio.google.com/) e adicione
 GEMINI_API_KEY=sua_chave_aqui
 ```
 
-### 3. Executar o Dashboard
+### 3. Executar o Dashboard Principal ou o Simulador de Opções
 
 ```bash
+# Dashboard Principal B3 + CAN SLM + Gemini IA:
 streamlit run app.py
+
+# Simulador Visual de Opções B3 (Call & Put):
+streamlit run options_app.py
 ```
