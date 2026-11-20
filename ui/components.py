@@ -667,6 +667,667 @@ def render_asset_qa_section(
                 st.markdown("</div>", unsafe_allow_html=True)
 
 
+def render_share_calculator_tab(ticker: str, company_name: str, metrics: dict, ticker_info: dict = None):
+    """
+    Renderiza a aba de Calculadora de Ações <-> Valor Investido (Ida e Volta),
+    considerando lote padrão (100 ações), mercado fracionário, troco e dividend yield estimado.
+    """
+    current_price = float(metrics.get("current_price", 0.0))
+    if current_price <= 0:
+        st.warning("Cotação atual indisponível para realizar o cálculo.")
+        return
+
+    info = ticker_info if isinstance(ticker_info, dict) else {}
+    div_yield = info.get("dividendYield")
+    has_dy = div_yield is not None and isinstance(div_yield, (int, float)) and div_yield > 0
+    # yfinance às vezes retorna dividendYield como decimal (0.08) ou percentual (8.0)
+    if has_dy:
+        dy_decimal = float(div_yield) / 100.0 if float(div_yield) > 1.0 else float(div_yield)
+    else:
+        dy_decimal = 0.0
+
+    clean_ticker = ticker.replace(".SA", "")
+
+    st.subheader(f"🧮 Simulador de Posição & Conversor: {clean_ticker} ({company_name})")
+    st.markdown(
+        f"Descubra instantaneamente **quantas ações de `{clean_ticker}` você consegue comprar** com um determinado valor "
+        f"ou **quanto custa acumular uma quantidade específica de ações**, com base na cotação atual de **R$ {current_price:,.2f}**."
+    )
+
+    # Controle de preço de referência (permite usar cotação atual ou simular outro preço-alvo)
+    col_ref1, col_ref2 = st.columns([1.2, 2.8])
+    with col_ref1:
+        custom_price = st.number_input(
+            f"Cotação de Referência ({clean_ticker}) [R$]:",
+            min_value=0.01,
+            value=round(current_price, 2),
+            step=0.10,
+            format="%.2f",
+            key=f"calc_ref_price_{ticker}",
+            help="Por padrão utiliza a última cotação da B3, mas você pode alterar para simular um preço-alvo de compra ou venda."
+        )
+    with col_ref2:
+        diff_ref_pct = ((custom_price - current_price) / current_price) * 100.0 if current_price else 0.0
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        if abs(custom_price - current_price) < 0.005:
+            st.caption(
+                f"📌 Usando a **cotação atual de mercado** (**R$ {current_price:.2f}**). "
+                f"1 Lote Padrão (100 ações) = **R$ {current_price * 100:,.2f}**."
+            )
+        else:
+            st.caption(
+                f"🎯 Simulando com preço personalizado de **R$ {custom_price:.2f}** "
+                f"(**{diff_ref_pct:+.2f}%** vs cotação atual de R$ {current_price:.2f}). "
+                f"1 Lote Padrão (100 ações) = **R$ {custom_price * 100:,.2f}**."
+            )
+
+    st.markdown("---")
+
+    col_val_to_qty, col_qty_to_val = st.columns(2)
+
+    # ==========================================================================
+    # COLUNA 1: VALOR (R$) -> QUANTIDADE DE AÇÕES
+    # ==========================================================================
+    with col_val_to_qty:
+        st.markdown(
+            """
+            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(17, 24, 39, 0.85) 100%);
+                        border: 1px solid #10b981; border-left: 5px solid #10b981; border-radius: 10px; padding: 14px 18px; margin-bottom: 14px;">
+                <span style="font-size: 1.1rem; font-weight: 700; color: #ffffff;">💵 Tenho um Valor (R$) ➔ Quantas Ações terei?</span><br>
+                <span style="font-size: 0.85rem; color: #9ca3af;">Simule quantas ações você compra com seu aporte financeiro</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        valor_aporte = st.number_input(
+            "Valor disponível para investir (R$):",
+            min_value=0.0,
+            value=1000.0,
+            step=100.0,
+            format="%.2f",
+            key=f"calc_val_input_{ticker}"
+        )
+
+        # Botões rápidos de aporte
+        st.caption("⚡ Atalhos de aporte:")
+        b1, b2, b3, b4 = st.columns(4)
+        with b1:
+            if st.button("R$ 500", key=f"btn_v500_{ticker}", use_container_width=True):
+                st.session_state[f"calc_val_input_{ticker}"] = 500.0
+                st.rerun()
+        with b2:
+            if st.button("R$ 1.000", key=f"btn_v1k_{ticker}", use_container_width=True):
+                st.session_state[f"calc_val_input_{ticker}"] = 1000.0
+                st.rerun()
+        with b3:
+            if st.button("R$ 5.000", key=f"btn_v5k_{ticker}", use_container_width=True):
+                st.session_state[f"calc_val_input_{ticker}"] = 5000.0
+                st.rerun()
+        with b4:
+            if st.button("R$ 10.000", key=f"btn_v10k_{ticker}", use_container_width=True):
+                st.session_state[f"calc_val_input_{ticker}"] = 10000.0
+                st.rerun()
+
+        qtd_total_acoes = int(valor_aporte // custom_price) if custom_price > 0 else 0
+        custo_efetivo = qtd_total_acoes * custom_price
+        troco = max(0.0, valor_aporte - custo_efetivo)
+
+        lotes_padrao = qtd_total_acoes // 100
+        qtd_lote_padrao = lotes_padrao * 100
+        qtd_fracionario = qtd_total_acoes % 100
+
+        m_a1, m_a2 = st.columns(2)
+        with m_a1:
+            st.metric(
+                label="Total de Ações Inteiras",
+                value=f"{qtd_total_acoes:,} ações".replace(",", "."),
+                delta=f"Custo real: R$ {custo_efetivo:,.2f}"
+            )
+        with m_a2:
+            st.metric(
+                label="Troco Restante (Caixa)",
+                value=f"R$ {troco:,.2f}",
+                delta=f"Faltam R$ {max(0.0, custom_price - troco):,.2f} p/ +1 ação",
+                delta_color="off"
+            )
+
+        # Detalhamento Lote Padrão vs Fracionário B3
+        ordem_lote_str = f"<b>{qtd_lote_padrao:,} ações</b> ({lotes_padrao} lote(s) via <code>{clean_ticker}</code>)".replace(",", ".")
+        ordem_frac_str = f"<b>{qtd_fracionario} ações</b> (mercado fracionário via <code>{clean_ticker}F</code>)"
+
+        dy_html_left = ""
+        if has_dy and qtd_total_acoes > 0:
+            div_anual_est = custo_efetivo * dy_decimal
+            div_mensal_est = div_anual_est / 12.0
+            dy_html_left = (
+                f"<div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #374151; color: #a7f3d0;'>"
+                f"💰 <b>Dividendos Estimados (DY {dy_decimal*100:.2f}% a.a.):</b> "
+                f"~<b>R$ {div_anual_est:,.2f}/ano</b> (~R$ {div_mensal_est:,.2f}/mês)"
+                f"</div>"
+            )
+
+        st.markdown(
+            f"""
+            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-radius: 8px; padding: 12px 16px; margin-top: 6px; font-size: 0.9rem; color: #e5e7eb;">
+                📦 <b>Como enviar a ordem na B3:</b><br>
+                • Lote Padrão: {ordem_lote_str} = <b>R$ {qtd_lote_padrao * custom_price:,.2f}</b><br>
+                • Fracionário: {ordem_frac_str} = <b>R$ {qtd_fracionario * custom_price:,.2f}</b>
+                {dy_html_left}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # ==========================================================================
+    # COLUNA 2: QUANTIDADE DE AÇÕES -> VALOR NECESSÁRIO (R$)
+    # ==========================================================================
+    with col_qty_to_val:
+        st.markdown(
+            """
+            <div style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.12) 0%, rgba(17, 24, 39, 0.85) 100%);
+                        border: 1px solid #38bdf8; border-left: 5px solid #38bdf8; border-radius: 10px; padding: 14px 18px; margin-bottom: 14px;">
+                <span style="font-size: 1.1rem; font-weight: 700; color: #ffffff;">📈 Quero X Ações ➔ Qual Valor (R$) preciso?</span><br>
+                <span style="font-size: 0.85rem; color: #9ca3af;">Descubra o patrimônio total correspondente a uma quantidade de ações</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        qtd_desejada = st.number_input(
+            f"Quantidade desejada de ações ({clean_ticker}):",
+            min_value=1,
+            value=100,
+            step=10,
+            format="%d",
+            key=f"calc_qty_input_{ticker}"
+        )
+
+        # Botões rápidos de quantidade
+        st.caption("⚡ Atalhos de quantidade (Lotes):")
+        q1, q2, q3, q4 = st.columns(4)
+        with q1:
+            if st.button("100 (1 Lote)", key=f"btn_q100_{ticker}", use_container_width=True):
+                st.session_state[f"calc_qty_input_{ticker}"] = 100
+                st.rerun()
+        with q2:
+            if st.button("500 (5 Lotes)", key=f"btn_q500_{ticker}", use_container_width=True):
+                st.session_state[f"calc_qty_input_{ticker}"] = 500
+                st.rerun()
+        with q3:
+            if st.button("1.000", key=f"btn_q1k_{ticker}", use_container_width=True):
+                st.session_state[f"calc_qty_input_{ticker}"] = 1000
+                st.rerun()
+        with q4:
+            if st.button("5.000", key=f"btn_q5k_{ticker}", use_container_width=True):
+                st.session_state[f"calc_qty_input_{ticker}"] = 5000
+                st.rerun()
+
+        valor_total_necessario = qtd_desejada * custom_price
+        lotes_q = qtd_desejada // 100
+        frac_q = qtd_desejada % 100
+
+        # Simulação comparativa na mínima e máxima do período
+        min_period = float(metrics.get("min_period", custom_price))
+        max_period = float(metrics.get("max_period", custom_price))
+        val_na_min = qtd_desejada * min_period
+        val_na_max = qtd_desejada * max_period
+
+        m_b1, m_b2 = st.columns(2)
+        with m_b1:
+            st.metric(
+                label="Valor Total Necessário",
+                value=f"R$ {valor_total_necessario:,.2f}",
+                delta=f"R$ {custom_price:,.2f} por ação",
+                delta_color="off"
+            )
+        with m_b2:
+            st.metric(
+                label="Valor no Topo do Período",
+                value=f"R$ {val_na_max:,.2f}",
+                delta=f"{(val_na_max - valor_total_necessario):+,.2f} R$ vs atual"
+            )
+
+        dy_html_right = ""
+        if has_dy and qtd_desejada > 0:
+            div_anual_q = valor_total_necessario * dy_decimal
+            div_mensal_q = div_anual_q / 12.0
+            dy_html_right = (
+                f"<div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #374151; color: #93c5fd;'>"
+                f"💰 <b>Renda Passiva Estimada (DY {dy_decimal*100:.2f}% a.a.):</b> "
+                f"~<b>R$ {div_anual_q:,.2f}/ano</b> (~R$ {div_mensal_q:,.2f}/mês)"
+                f"</div>"
+            )
+
+        st.markdown(
+            f"""
+            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-radius: 8px; padding: 12px 16px; margin-top: 6px; font-size: 0.9rem; color: #e5e7eb;">
+                📊 <b>Composição & Faixa de Preço no Período:</b><br>
+                • Equivalente a <b>{lotes_q} lote(s) padrão</b> ({lotes_q*100:,} ações) + <b>{frac_q} no fracionário</b><br>
+                • Na Mínima do período (R$ {min_period:.2f}): <b>R$ {val_na_min:,.2f}</b> &nbsp;|&nbsp; Na Máxima (R$ {max_period:.2f}): <b>R$ {val_na_max:,.2f}</b>
+                {dy_html_right}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.markdown("---")
+
+    # ==========================================================================
+    # TABELAS DE REFERÊNCIA RÁPIDA (VALOR <-> AÇÕES)
+    # ==========================================================================
+    st.markdown("#### 📋 Tabelas de Referência Rápida")
+    t_col1, t_col2 = st.columns(2)
+
+    with t_col1:
+        st.caption(f"💵 **Por Valor Investido** (a R$ {custom_price:.2f} por `{clean_ticker}`)")
+        valores_ref = [500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]
+        linhas_val = []
+        for v in valores_ref:
+            q = int(v // custom_price)
+            custo_r = q * custom_price
+            troco_r = v - custo_r
+            linhas_val.append({
+                "Valor (R$)": f"R$ {v:,.2f}",
+                "Qtd. Ações": f"{q:,}".replace(",", "."),
+                "Lotes / Frac.": f"{q // 100}L + {q % 100}F",
+                "Custo Real": f"R$ {custo_r:,.2f}",
+                "Troco": f"R$ {troco_r:,.2f}"
+            })
+        st.dataframe(linhas_val, use_container_width=True, hide_index=True)
+
+    with t_col2:
+        st.caption(f"📈 **Por Quantidade de Ações** (a R$ {custom_price:.2f} por `{clean_ticker}`)")
+        qtds_ref = [10, 50, 100, 200, 500, 1000, 2500, 5000]
+        linhas_qtd = []
+        for q in qtds_ref:
+            custo_q = q * custom_price
+            linha = {
+                "Qtd. Ações": f"{q:,}".replace(",", "."),
+                "Modalidade B3": f"{q // 100} Lote(s)" if q % 100 == 0 else f"Fracionário ({clean_ticker}F)",
+                "Valor Total (R$)": f"R$ {custo_q:,.2f}",
+                "Na Mínima": f"R$ {q * min_period:,.2f}",
+                "Na Máxima": f"R$ {q * max_period:,.2f}"
+            }
+            linhas_qtd.append(linha)
+        st.dataframe(linhas_qtd, use_container_width=True, hide_index=True)
+
+
+import math
+import plotly.graph_objects as go
+
+
+def render_earnings_and_dividends_tab(ticker: str, company_name: str, metrics: dict, ticker_info: dict = None):
+    """
+    Renderiza a aba de Ganhos por Ação, Dividendos, Payout, Preço-Teto (Bazin / Graham)
+    e Múltiplos Fundamentalistas do ativo.
+    """
+    current_price = float(metrics.get("current_price", 0.0))
+    if current_price <= 0:
+        st.warning("Cotação atual indisponível para calcular indicadores por ação.")
+        return
+
+    info = ticker_info if isinstance(ticker_info, dict) else {}
+    clean_ticker = ticker.replace(".SA", "")
+
+    def _safe_float(val):
+        try:
+            if val is None:
+                return None
+            f = float(val)
+            return None if math.isnan(f) or math.isinf(f) else f
+        except Exception:
+            return None
+
+    # 1. Lucro por Ação (LPA / EPS) e Valor Patrimonial por Ação (VPA / Book Value)
+    lpa_ttm = _safe_float(info.get("trailingEps"))
+    lpa_fwd = _safe_float(info.get("forwardEps"))
+    annual_eps_hist = info.get("_annual_eps_history", {}) or {}
+    if lpa_ttm is None and annual_eps_hist:
+        latest_yr = sorted(annual_eps_hist.keys(), reverse=True)[0]
+        lpa_ttm = _safe_float(annual_eps_hist.get(latest_yr))
+
+    vpa = _safe_float(info.get("bookValue"))
+
+    # 2. Dividendos por Ação (DPA 12m) e Dividend Yield (DY)
+    dpa_12m = _safe_float(info.get("_calc_dpa_12m"))
+    if dpa_12m is None or dpa_12m <= 0:
+        dpa_12m = _safe_float(info.get("trailingAnnualDividendRate")) or _safe_float(info.get("dividendRate")) or 0.0
+
+    div_count_12m = int(info.get("_calc_div_count_12m", 0) or 0)
+
+    if dpa_12m > 0 and current_price > 0:
+        dy_pct = (dpa_12m / current_price) * 100.0
+    else:
+        raw_dy = _safe_float(info.get("trailingAnnualDividendYield")) or _safe_float(info.get("dividendYield"))
+        if raw_dy is not None and raw_dy > 0:
+            dy_pct = raw_dy if raw_dy > 1.0 else raw_dy * 100.0
+            if dpa_12m <= 0:
+                dpa_12m = current_price * (dy_pct / 100.0)
+        else:
+            dy_pct = 0.0
+
+    # 3. Payout Ratio (% do Lucro distribuído em proventos)
+    raw_payout = _safe_float(info.get("payoutRatio"))
+    if dpa_12m > 0 and lpa_ttm is not None and lpa_ttm > 0:
+        payout_pct = (dpa_12m / lpa_ttm) * 100.0
+    elif raw_payout is not None and raw_payout >= 0:
+        payout_pct = raw_payout * 100.0 if raw_payout <= 5.0 else raw_payout
+    else:
+        payout_pct = None
+
+    # 4. Múltiplos de Valuation e Rentabilidade (P/L, Earnings Yield, P/VP, ROE, Margem Líquida)
+    pl_ratio = (current_price / lpa_ttm) if (lpa_ttm is not None and lpa_ttm != 0) else _safe_float(info.get("trailingPE"))
+    earnings_yield_pct = ((lpa_ttm / current_price) * 100.0) if (lpa_ttm is not None and current_price > 0) else None
+    pvp_ratio = (current_price / vpa) if (vpa is not None and vpa > 0) else _safe_float(info.get("priceToBook"))
+
+    raw_roe = _safe_float(info.get("returnOnEquity"))
+    roe_pct = (raw_roe * 100.0) if raw_roe is not None else None
+
+    raw_margin = _safe_float(info.get("profitMargins"))
+    margin_pct = (raw_margin * 100.0) if raw_margin is not None else None
+
+    st.subheader(f"💰 Ganhos por Ação, Dividendos & Valuation: {clean_ticker} ({company_name})")
+    st.markdown(
+        f"Análise detalhada da **geração de lucro por ação (LPA)**, **remuneração ao acionista (DPA, Dividend Yield e Payout)** "
+        f"e **preço justo / teto** para `{clean_ticker}` na cotação atual de **R$ {current_price:,.2f}**."
+    )
+
+    # ==========================================================================
+    # 1. CARDS DE DESTAQUE (MÉTRICAS POR AÇÃO)
+    # ==========================================================================
+    k1, k2, k3, k4 = st.columns(4)
+
+    with k1:
+        lpa_str = f"R$ {lpa_ttm:,.2f}" if lpa_ttm is not None else "N/D"
+        ey_str = f"Earnings Yield: {earnings_yield_pct:+.2f}%" if earnings_yield_pct is not None else "Lucro líquido / ação (12m)"
+        st.metric(
+            label="Lucro por Ação (LPA 12m)",
+            value=lpa_str,
+            delta=ey_str,
+            delta_color="normal" if (lpa_ttm or 0) >= 0 else "inverse",
+            help="Quanto de lucro líquido a empresa gerou para cada 1 ação nos últimos 12 meses (EPS). O Earnings Yield (LPA/Preço) mostra a rentabilidade total gerada pela empresa sobre o preço da ação."
+        )
+
+    with k2:
+        dpa_str = f"R$ {dpa_12m:,.2f}" if dpa_12m > 0 else "R$ 0,00"
+        pag_str = f"{div_count_12m} pagamento(s) em 12m" if div_count_12m > 0 else "Proventos últimos 12m"
+        st.metric(
+            label="Dividendos por Ação (DPA 12m)",
+            value=dpa_str,
+            delta=pag_str,
+            delta_color="off",
+            help="Soma dos dividendos e JCP pagos por cada 1 ação nos últimos 12 meses."
+        )
+
+    with k3:
+        dy_str = f"{dy_pct:.2f}%"
+        dy_tag = "Acima de 6% a.a. (Bazin)" if dy_pct >= 6.0 else ("Moderado" if dy_pct >= 3.0 else "Baixo / Crescimento")
+        st.metric(
+            label="Dividend Yield (DY 12m)",
+            value=dy_str,
+            delta=dy_tag,
+            delta_color="normal" if dy_pct >= 6.0 else "off",
+            help="Retorno percentual em proventos nos últimos 12 meses em relação à cotação atual (DPA 12m ÷ Preço Atual)."
+        )
+
+    with k4:
+        if payout_pct is not None:
+            payout_str = f"{payout_pct:.1f}%"
+            if payout_pct > 100:
+                p_tag = "Acima do lucro (>100%)"
+            elif payout_pct >= 50:
+                p_tag = "Forte distribuição (Vacas Leiteiras)"
+            elif payout_pct >= 25:
+                p_tag = "Equilíbrio (Retenção + Dividendo)"
+            else:
+                p_tag = "Foco em Reinvestimento"
+        elif lpa_ttm is not None and lpa_ttm < 0:
+            payout_str = "LPA Negativo"
+            p_tag = "Prejuízo contábil 12m"
+        else:
+            payout_str = "N/D"
+            p_tag = "Sem dados de distribuição"
+
+        st.metric(
+            label="Payout (DPA ÷ LPA)",
+            value=payout_str,
+            delta=p_tag,
+            delta_color="off",
+            help="Percentual do lucro líquido por ação (LPA) que é distribuído aos acionistas na forma de dividendos/JCP (DPA). O restante é retido pela empresa para reinvestimento ou redução de dívida."
+        )
+
+    # Segunda linha de métricas fundamentalistas por ação
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        pl_str = f"{pl_ratio:.2f}x" if pl_ratio is not None else "N/D"
+        pl_sub = f"LPA Proj.: R$ {lpa_fwd:.2f}" if lpa_fwd is not None else "Anos p/ retorno via lucro"
+        st.metric(
+            label="P/L (Preço ÷ Lucro)",
+            value=pl_str,
+            delta=pl_sub,
+            delta_color="off",
+            help="Indica quantas vezes o preço atual equivale ao lucro anual por ação (ou quantos anos levaria para reaver o capital via lucro líquido constante)."
+        )
+
+    with m2:
+        vpa_str = f"R$ {vpa:,.2f}" if vpa is not None else "N/D"
+        pvp_str = f"P/VP: {pvp_ratio:.2f}x" if pvp_ratio is not None else "Patrimônio Líq. / Ação"
+        st.metric(
+            label="VPA (Valor Patrimonial / Ação)",
+            value=vpa_str,
+            delta=pvp_str,
+            delta_color="off",
+            help="Patrimônio líquido contábil da empresa dividido pelo total de ações. P/VP < 1,0x indica que a ação negocia abaixo do patrimônio contábil."
+        )
+
+    with m3:
+        roe_str = f"{roe_pct:.1f}%" if roe_pct is not None else "N/D"
+        marg_str = f"Margem Líq.: {margin_pct:.1f}%" if margin_pct is not None else "Retorno s/ Patrimônio"
+        st.metric(
+            label="ROE (Retorno s/ Patrimônio)",
+            value=roe_str,
+            delta=marg_str,
+            delta_color="normal" if (roe_pct or 0) >= 15.0 else "off",
+            help="Mede a rentabilidade que a empresa gera sobre o patrimônio líquido dos acionistas (Lucro Líquido ÷ Patrimônio Líquido)."
+        )
+
+    with m4:
+        if lpa_ttm is not None and lpa_ttm > 0:
+            lucro_retido = max(0.0, lpa_ttm - dpa_12m)
+            ret_pct = (lucro_retido / lpa_ttm) * 100.0
+            ret_str = f"R$ {lucro_retido:,.2f}"
+            ret_sub = f"{ret_pct:.1f}% retido na empresa"
+        else:
+            ret_str = "N/D"
+            ret_sub = "LPA - DPA"
+        st.metric(
+            label="Lucro Retido por Ação",
+            value=ret_str,
+            delta=ret_sub,
+            delta_color="off",
+            help="Parcela do lucro por ação (LPA - DPA) que permanece no caixa da companhia para financiar crescimento, aquisições ou amortizar dívidas."
+        )
+
+    # ==========================================================================
+    # 2. BARRA VISUAL DE DESTINAÇÃO DO LUCRO POR AÇÃO (PAYOUT vs RETENÇÃO)
+    # ==========================================================================
+    if lpa_ttm is not None and lpa_ttm > 0:
+        pct_dist = min(100.0, max(0.0, (dpa_12m / lpa_ttm) * 100.0))
+        pct_ret = max(0.0, 100.0 - pct_dist)
+        excesso_txt = (
+            f" ⚠️ <i>Nota: O DPA (R$ {dpa_12m:.2f}) superou o LPA contábil (R$ {lpa_ttm:.2f}) em {((dpa_12m/lpa_ttm)-1)*100:.1f}%, indicando uso de reservas de lucros ou geração de caixa acumulada.</i>"
+            if dpa_12m > lpa_ttm else ""
+        )
+        st.markdown(
+            f"""
+            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-radius: 10px; padding: 14px 18px; margin: 10px 0 16px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
+                    <span style="font-size: 0.95rem; font-weight: 700; color: #f3f4f6;">
+                        🍰 Destinação de Cada R$ {lpa_ttm:.2f} de Lucro por Ação (LPA):
+                    </span>
+                    <span style="font-size: 0.85rem; color: #9ca3af;">
+                        <b style="color: #10b981;">🟢 Distribuído (Payout): {pct_dist:.1f}% (R$ {dpa_12m:.2f})</b> &nbsp;|&nbsp;
+                        <b style="color: #38bdf8;">🔵 Retido p/ Reinvestimento: {pct_ret:.1f}% (R$ {max(0.0, lpa_ttm - dpa_12m):.2f})</b>
+                    </span>
+                </div>
+                <div style="width: 100%; height: 14px; background-color: #1e293b; border-radius: 999px; overflow: hidden; display: flex;">
+                    <div style="width: {pct_dist:.1f}%; background: linear-gradient(90deg, #10b981, #059669); height: 100%;"></div>
+                    <div style="width: {pct_ret:.1f}%; background: linear-gradient(90deg, #0284c7, #38bdf8); height: 100%;"></div>
+                </div>
+                <div style="font-size: 0.82rem; color: #9ca3af; margin-top: 6px;">
+                    A empresa converte cada ação em <b>R$ {lpa_ttm:.2f}</b> de lucro anual, pagando <b>R$ {dpa_12m:.2f}</b> diretamente ao bolso do acionista.{excesso_txt}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.markdown("---")
+
+    # ==========================================================================
+    # 3. PREÇO-TETO BAZIN (DIVIDENDOS) & PREÇO JUSTO DE GRAHAM (LPA x VPA)
+    # ==========================================================================
+    st.markdown("#### 🎯 Termômetro de Valuation por Ação: Preço-Teto (Bazin) & Valor Intrínseco (Graham)")
+    col_bazin, col_graham = st.columns(2)
+
+    with col_bazin:
+        meta_dy_bazin = st.slider(
+            "Meta de Dividend Yield Mínimo Exigido — Método Décio Bazin (% a.a.):",
+            min_value=4.0,
+            max_value=14.0,
+            value=6.0,
+            step=0.5,
+            key=f"slider_bazin_{ticker}",
+            help="Décio Bazin preconizava comprar ações que pagam pelo menos 6% ao ano em dividendos. Preço-Teto = DPA ÷ Meta de DY."
+        )
+        if dpa_12m > 0:
+            preco_teto_bazin = dpa_12m / (meta_dy_bazin / 100.0)
+            margem_bazin_pct = ((preco_teto_bazin - current_price) / current_price) * 100.0
+            bazin_cor = "#10b981" if preco_teto_bazin >= current_price else "#f59e0b"
+            bazin_status = "✅ Abaixo do Preço-Teto (Margem Positiva)" if preco_teto_bazin >= current_price else "⚠️ Acima do Preço-Teto para o DY exigido"
+            st.markdown(
+                f"""
+                <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 5px solid {bazin_cor}; border-radius: 10px; padding: 14px 18px;">
+                    <div style="font-size: 0.9rem; color: #9ca3af; font-weight: 600;">📌 Preço-Teto de Bazin (DY Alvo de {meta_dy_bazin:.1f}% a.a.)</div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0;">
+                        <span style="font-size: 1.5rem; font-weight: 800; color: #ffffff;">R$ {preco_teto_bazin:,.2f}</span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color: {bazin_cor};">{margem_bazin_pct:+.1f}% vs Cotação Atual</span>
+                    </div>
+                    <div style="font-size: 0.84rem; color: #d1d5db;">
+                        {bazin_status}<br>
+                        <span style="color: #9ca3af;">Fórmula: DPA 12m (R$ {dpa_12m:.2f}) ÷ {meta_dy_bazin:.1f}% = R$ {preco_teto_bazin:,.2f}</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("ℹ️ Ativo sem distribuição de dividendos nos últimos 12 meses para cálculo do Preço-Teto de Bazin.")
+
+    with col_graham:
+        st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
+        if lpa_ttm is not None and lpa_ttm > 0 and vpa is not None and vpa > 0:
+            valor_graham = math.sqrt(22.5 * lpa_ttm * vpa)
+            margem_graham_pct = ((valor_graham - current_price) / current_price) * 100.0
+            graham_cor = "#10b981" if valor_graham >= current_price else "#f59e0b"
+            graham_status = "✅ Descontada pela Fórmula de Graham" if valor_graham >= current_price else "⚠️ Negociando com prêmio sobre Graham"
+            st.markdown(
+                f"""
+                <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 5px solid {graham_cor}; border-radius: 10px; padding: 14px 18px; margin-top: 16px;">
+                    <div style="font-size: 0.9rem; color: #9ca3af; font-weight: 600;">📐 Valor Intrínseco de Benjamin Graham (√[22,5 × LPA × VPA])</div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0;">
+                        <span style="font-size: 1.5rem; font-weight: 800; color: #ffffff;">R$ {valor_graham:,.2f}</span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color: {graham_cor};">{margem_graham_pct:+.1f}% vs Cotação Atual</span>
+                    </div>
+                    <div style="font-size: 0.84rem; color: #d1d5db;">
+                        {graham_status}<br>
+                        <span style="color: #9ca3af;">Fórmula: √(22,5 × R$ {lpa_ttm:.2f} × R$ {vpa:.2f}) — limite clássico P/L ≤ 15x e P/VP ≤ 1,5x.</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.info(
+                "ℹ️ **Fórmula de Benjamin Graham (√[22,5 × LPA × VPA]):** "
+                "Requer LPA e VPA positivos. Quando um deles é negativo ou indisponível, o cálculo não se aplica."
+            )
+
+    st.markdown("---")
+
+    # ==========================================================================
+    # 4. HISTÓRICO DE DIVIDENDOS E LUCRO POR AÇÃO (GRÁFICO + TABELA DE PAGAMENTOS)
+    # ==========================================================================
+    yearly_divs = info.get("_yearly_dividends", {}) or {}
+    recent_divs = info.get("_recent_dividends", []) or []
+
+    col_hist_chart, col_hist_table = st.columns([1.4, 1.0])
+
+    with col_hist_chart:
+        st.markdown("#### 📊 Evolução Anual: Lucro por Ação (LPA) vs Dividendos Pagos (DPA)")
+        all_years = sorted(set(list(yearly_divs.keys()) + list(annual_eps_hist.keys())))
+        if all_years:
+            dpa_vals = [round(float(yearly_divs.get(y, 0.0)), 4) for y in all_years]
+            lpa_vals = [round(float(annual_eps_hist[y]), 4) if y in annual_eps_hist else None for y in all_years]
+
+            fig_earn = go.Figure()
+            if any(v is not None for v in lpa_vals):
+                fig_earn.add_trace(
+                    go.Bar(
+                        x=all_years,
+                        y=lpa_vals,
+                        name="Lucro por Ação (LPA)",
+                        marker_color="#38bdf8",
+                        text=[f"R$ {v:.2f}" if v is not None else "" for v in lpa_vals],
+                        textposition="auto"
+                    )
+                )
+            if any(v > 0 for v in dpa_vals):
+                fig_earn.add_trace(
+                    go.Bar(
+                        x=all_years,
+                        y=dpa_vals,
+                        name="Dividendos por Ação (DPA)",
+                        marker_color="#10b981",
+                        text=[f"R$ {v:.2f}" if v > 0 else "" for v in dpa_vals],
+                        textposition="auto"
+                    )
+                )
+
+            fig_earn.update_layout(
+                template="plotly_dark",
+                barmode="group",
+                plot_bgcolor="#111827",
+                paper_bgcolor="#0e1117",
+                yaxis=dict(title="R$ por Ação", tickprefix="R$ ", gridcolor="#1f2937"),
+                xaxis=dict(title="Ano", type="category", gridcolor="#1f2937"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                margin=dict(l=20, r=20, t=40, b=20),
+                height=340
+            )
+            st.plotly_chart(fig_earn, use_container_width=True)
+        else:
+            st.info("Histórico anual de LPA e Dividendos indisponível no Yahoo Finance para este ativo.")
+
+    with col_hist_table:
+        st.markdown("#### 🗓️ Últimos Proventos Pagos por Ação")
+        if recent_divs:
+            rows_div = []
+            for ev in recent_divs:
+                val_ev = float(ev["valor"])
+                dy_unit = (val_ev / current_price) * 100.0 if current_price > 0 else 0.0
+                rows_div.append({
+                    "Data Ex": ev["data"],
+                    "Valor / Ação": f"R$ {val_ev:.4f}",
+                    "Por 100 Ações (1 Lote)": f"R$ {val_ev * 100:,.2f}",
+                    "Yield s/ Cotação": f"{dy_unit:.2f}%"
+                })
+            st.dataframe(rows_div, use_container_width=True, hide_index=True, height=340)
+        else:
+            st.info("Nenhum pagamento recente de dividendo/JCP registrado para este ticker.")
+
+
 def render_footer():
     """
     Renderiza o rodapé institucional da aplicação.

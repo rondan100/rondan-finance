@@ -73,10 +73,20 @@ def _extract_ticker_fundamentals(ticker_obj) -> dict:
     except Exception:
         pass
 
-    # Cálculo do CAGR anual 3-4 anos (A)
+    # Cálculo do CAGR anual 3-4 anos (A) e histórico anual de LPA/Lucro
     try:
         a_stmt = ticker_obj.income_stmt
         if a_stmt is not None and not a_stmt.empty:
+            for row_label in ["Diluted EPS", "Basic EPS"]:
+                if row_label in a_stmt.index:
+                    eps_s = a_stmt.loc[row_label].dropna()
+                    if not eps_s.empty:
+                        info["_annual_eps_history"] = {
+                            str(k.year if hasattr(k, "year") else k)[:4]: float(v)
+                            for k, v in eps_s.iloc[:5].items()
+                        }
+                        break
+
             for row_label in ["Net Income", "Net Income Common Stockholders", "Diluted EPS", "Basic EPS"]:
                 if row_label in a_stmt.index:
                     series = a_stmt.loc[row_label].dropna()
@@ -93,6 +103,33 @@ def _extract_ticker_fundamentals(ticker_obj) -> dict:
                             info["_calc_annual_cagr_nonpositive"] = True
                             info["_calc_recent_profit_positive"] = bool(lucro_recente > 0)
                         break
+    except Exception:
+        pass
+
+    # Extração do histórico real de dividendos/proventos pagos por ação (últimos 5 anos e TTM 12m)
+    try:
+        divs = ticker_obj.dividends
+        if divs is not None and not divs.empty:
+            divs_s = divs.dropna()
+            if not divs_s.empty:
+                now_ts = pd.Timestamp.now(tz=divs_s.index.tz) if getattr(divs_s.index, "tz", None) is not None else pd.Timestamp.now()
+                cutoff_12m = now_ts - pd.Timedelta(days=365)
+                cutoff_5y = now_ts - pd.Timedelta(days=365 * 5)
+
+                divs_12m = divs_s[divs_s.index >= cutoff_12m]
+                info["_calc_dpa_12m"] = float(divs_12m.sum()) if not divs_12m.empty else 0.0
+                info["_calc_div_count_12m"] = int(len(divs_12m))
+
+                divs_5y = divs_s[divs_s.index >= cutoff_5y]
+                if not divs_5y.empty:
+                    yearly_divs = divs_5y.groupby(divs_5y.index.year).sum()
+                    info["_yearly_dividends"] = {str(int(yr)): float(val) for yr, val in yearly_divs.items()}
+
+                recent_events = []
+                for dt_idx, val in divs_s.tail(12).iloc[::-1].items():
+                    dt_str = dt_idx.strftime("%d/%m/%Y") if hasattr(dt_idx, "strftime") else str(dt_idx)[:10]
+                    recent_events.append({"data": dt_str, "valor": float(val)})
+                info["_recent_dividends"] = recent_events
     except Exception:
         pass
 

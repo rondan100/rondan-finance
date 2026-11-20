@@ -30,6 +30,8 @@ from ui.components import (
     render_news_expander,
     render_scanner_results,
     render_asset_qa_section,
+    render_share_calculator_tab,
+    render_earnings_and_dividends_tab,
     render_footer
 )
 
@@ -179,160 +181,186 @@ ibov_data = fetch_ibov_data()
 
 render_top_metrics(metrics, ticker_normalized, period_selected)
 
-modo_canslim = st.radio(
-    "Perfil de Rigor CAN SLM (Foco Swing Trade / Momentum):",
-    ["Calibrado B3", "Estrito Livro (O'Neil)"],
-    horizontal=True,
-    help=(
-        "Calibrado B3: Ajusta os limiares fundamentalistas (LPA YoY > 12%, CAGR > 15% + ROE >= 14% ou ROE >= 17%, Topo 52s <= 20%) "
-        "à realidade das empresas brasileiras.\n\n"
-        "Estrito Livro (O'Neil): Usa as réguas originais de William O'Neil (LPA YoY > 20%, CAGR > 25% + ROE >= 17%, Topo 52s <= 15%)."
-    )
-)
-strict_mode_canslim = (modo_canslim == "Estrito Livro (O'Neil)")
-
-canslim_data = calculate_canslim_metrics(
-    hist_data,
-    ticker_info,
-    ibov_data,
-    strict_mode=strict_mode_canslim
-)
-if canslim_data and canslim_data.get("summary_line"):
-    metrics["summary_line"] = f"{metrics['summary_line']} || {canslim_data['summary_line']}"
-
-render_canslim_card(canslim_data)
-
-st.markdown("---")
-
 # ==============================================================================
-# RADAR B3 / SCANNER DE TENDÊNCIA DE COMPRA E OPORTUNIDADES
+# ABAS PRINCIPAIS DE NAVEGAÇÃO
 # ==============================================================================
-if "radar_expander_open" not in st.session_state:
-    st.session_state["radar_expander_open"] = False
+tab_analise, tab_ganhos, tab_calculadora = st.tabs([
+    "📊 Análise Técnica, CAN SLM & IA",
+    "💰 Ganhos por Ação, Dividendos & Payout",
+    "🧮 Calculadora: Valor ⇄ Quantidade de Ações"
+])
 
-with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra & Score CAN SLM", expanded=st.session_state["radar_expander_open"]):
-    st.markdown(
-        "Identifique automaticamente quais das ações mais negociadas da Bolsa Brasileira (**B3**) "
-        "combinam **tendência técnica de alta** (Preço > MMA 9 > MMA 21) com forte **Score Quantitativo CAN SLM** "
-        f"(modo atual: **{modo_canslim}**)."
-    )
-    col_escopo, col_scan_btn, col_scan_info = st.columns([2, 1, 2])
-    with col_escopo:
-        escopo_escolhido = st.radio(
-            "Abrangência do Escaneamento:",
-            options=["Todos os 44 Ativos da Lista B3", "Top 20 Mais Líquidos"],
-            horizontal=True,
-            label_visibility="collapsed"
+with tab_analise:
+    modo_canslim = st.radio(
+        "Perfil de Rigor CAN SLM (Foco Swing Trade / Momentum):",
+        ["Calibrado B3", "Estrito Livro (O'Neil)"],
+        horizontal=True,
+        help=(
+            "Calibrado B3: Ajusta os limiares fundamentalistas (LPA YoY > 12%, CAGR > 15% + ROE >= 14% ou ROE >= 17%, Topo 52s <= 20%) "
+            "à realidade das empresas brasileiras.\n\n"
+            "Estrito Livro (O'Neil): Usa as réguas originais de William O'Neil (LPA YoY > 20%, CAGR > 25% + ROE >= 17%, Topo 52s <= 15%)."
         )
-    scan_all_flag = "Todos" in escopo_escolhido
+    )
+    strict_mode_canslim = (modo_canslim == "Estrito Livro (O'Neil)")
 
-    with col_scan_btn:
-        btn_scan_radar = st.button("🔍 Escanear Mercado", type="secondary", use_container_width=True)
+    canslim_data = calculate_canslim_metrics(
+        hist_data,
+        ticker_info,
+        ibov_data,
+        strict_mode=strict_mode_canslim
+    )
+    if canslim_data and canslim_data.get("summary_line"):
+        metrics["summary_line"] = f"{metrics['summary_line']} || {canslim_data['summary_line']}"
 
-    with col_scan_info:
-        qtd_label = "44 ações populares" if scan_all_flag else "Top 20 ações"
-        st.caption(f"⚡ Varredura paralela combinando Médias Móveis (MMA 9/21) + **Score CAN SLM ({modo_canslim})** em **{qtd_label}**.")
+    render_canslim_card(canslim_data)
 
-    if btn_scan_radar:
-        st.session_state["radar_expander_open"] = True
-        st.session_state["b3_scan_active"] = True
-        with st.spinner(f"Escaneando e ranqueando oportunidades em {qtd_label} ({modo_canslim})..."):
-            st.session_state["b3_scan_results"] = scan_b3_market_opportunities(
-                scan_all=scan_all_flag,
-                strict_mode=strict_mode_canslim
+    st.markdown("---")
+
+    # ==============================================================================
+    # RADAR B3 / SCANNER DE TENDÊNCIA DE COMPRA E OPORTUNIDADES
+    # ==============================================================================
+    if "radar_expander_open" not in st.session_state:
+        st.session_state["radar_expander_open"] = False
+
+    with st.expander("🎯 Radar B3: Escanear Ações com Tendência de Compra & Score CAN SLM", expanded=st.session_state["radar_expander_open"]):
+        st.markdown(
+            "Identifique automaticamente quais das ações mais negociadas da Bolsa Brasileira (**B3**) "
+            "combinam **tendência técnica de alta** (Preço > MMA 9 > MMA 21) com forte **Score Quantitativo CAN SLM** "
+            f"(modo atual: **{modo_canslim}**)."
+        )
+        col_escopo, col_scan_btn, col_scan_info = st.columns([2, 1, 2])
+        with col_escopo:
+            escopo_escolhido = st.radio(
+                "Abrangência do Escaneamento:",
+                options=["Todos os 44 Ativos da Lista B3", "Top 20 Mais Líquidos"],
+                horizontal=True,
+                label_visibility="collapsed"
             )
-            st.session_state["b3_scan_last_params"] = (scan_all_flag, strict_mode_canslim)
+        scan_all_flag = "Todos" in escopo_escolhido
 
-    # Atualiza instantaneamente o Radar B3 se o usuário trocar o Perfil de Rigor CAN SLM ou a Abrangência
-    if st.session_state.get("b3_scan_active") and st.session_state.get("b3_scan_last_params") != (scan_all_flag, strict_mode_canslim):
-        with st.spinner(f"Recalculando Radar B3 para o modo {modo_canslim}..."):
-            st.session_state["b3_scan_results"] = scan_b3_market_opportunities(
-                scan_all=scan_all_flag,
-                strict_mode=strict_mode_canslim
-            )
-            st.session_state["b3_scan_last_params"] = (scan_all_flag, strict_mode_canslim)
+        with col_scan_btn:
+            btn_scan_radar = st.button("🔍 Escanear Mercado", type="secondary", use_container_width=True)
 
-    if "b3_scan_results" in st.session_state and st.session_state["b3_scan_results"]:
-        render_scanner_results(st.session_state["b3_scan_results"])
+        with col_scan_info:
+            qtd_label = "44 ações populares" if scan_all_flag else "Top 20 ações"
+            st.caption(f"⚡ Varredura paralela combinando Médias Móveis (MMA 9/21) + **Score CAN SLM ({modo_canslim})** em **{qtd_label}**.")
 
-st.markdown("---")
-
-# Inicializar armazenamento da análise na sessão
-if "ai_analysis_data" not in st.session_state:
-    st.session_state["ai_analysis_data"] = {}
-
-analysis_key = f"{ticker_normalized}_{period_selected}_{selected_model}"
-current_analysis = st.session_state["ai_analysis_data"].get(analysis_key)
-
-# ==============================================================================
-# SEÇÃO DO MOTOR DE IA (GOOGLE GEMINI - DISPARO POR BOTÃO)
-# ==============================================================================
-st.subheader("🤖 Diagnóstico de IA | Swing Trade & Momentum (Curto/Médio Prazo)")
-
-if not active_api_key or active_api_key == "sua_chave_aqui":
-    st.info("💡 **Dica:** Para ativar a análise preditiva por Inteligência Artificial, informe sua **GEMINI_API_KEY** no arquivo `.env` ou insira-a no campo correspondente na barra lateral.")
-else:
-    col_btn, col_msg = st.columns([1, 2])
-    with col_btn:
-        btn_disparar_ia = st.button("⚡ Gerar Diagnóstico com IA", type="primary", use_container_width=True)
-    with col_msg:
-        rpd = GEMINI_MODEL_RPD.get(selected_model, "?")
-        st.caption(f"Modelo: `{selected_model}` ({rpd} consultas/dia no nível gratuito). A IA só é consultada quando você clica no botão.")
-
-    if btn_disparar_ia:
-        titulos_noticias = format_news_for_prompt(news_items)
-        with st.spinner(f"Processando diagnóstico com {selected_model}..."):
-            try:
-                ai_result = gerar_analise_cached(
-                    ticker=f"{ticker_normalized} ({company_name})",
-                    dados_mercado_str=metrics["summary_line"],
-                    titulos_noticias_str=titulos_noticias,
-                    api_key=active_api_key,
-                    modelo_preferencial=selected_model
+        if btn_scan_radar:
+            st.session_state["radar_expander_open"] = True
+            st.session_state["b3_scan_active"] = True
+            with st.spinner(f"Escaneando e ranqueando oportunidades em {qtd_label} ({modo_canslim})..."):
+                st.session_state["b3_scan_results"] = scan_b3_market_opportunities(
+                    scan_all=scan_all_flag,
+                    strict_mode=strict_mode_canslim
                 )
-                st.session_state["ai_analysis_data"][analysis_key] = ai_result
-                current_analysis = ai_result
-            except Exception as err:
-                st.error(f"⚠️ Erro ao analisar: {err}")
+                st.session_state["b3_scan_last_params"] = (scan_all_flag, strict_mode_canslim)
 
-    # Exibe o diagnóstico gerado e mantido na sessão para o ativo atual
-    if current_analysis:
-        render_ai_card(current_analysis)
-        render_reasons_and_variables(
-            motivos=current_analysis.get("principais_motivos", []),
-            variaveis=current_analysis.get("variaveis_chave", []),
-            ai_result=current_analysis,
-            ticker=ticker_normalized
-        )
-    elif not btn_disparar_ia:
-        st.info(f"💡 Para gerar o diagnóstico inteligente de **{ticker_normalized}**, clique no botão **⚡ Gerar Diagnóstico com IA** acima.")
+        # Atualiza instantaneamente o Radar B3 se o usuário trocar o Perfil de Rigor CAN SLM ou a Abrangência
+        if st.session_state.get("b3_scan_active") and st.session_state.get("b3_scan_last_params") != (scan_all_flag, strict_mode_canslim):
+            with st.spinner(f"Recalculando Radar B3 para o modo {modo_canslim}..."):
+                st.session_state["b3_scan_results"] = scan_b3_market_opportunities(
+                    scan_all=scan_all_flag,
+                    strict_mode=strict_mode_canslim
+                )
+                st.session_state["b3_scan_last_params"] = (scan_all_flag, strict_mode_canslim)
 
-st.markdown("---")
+        if "b3_scan_results" in st.session_state and st.session_state["b3_scan_results"]:
+            render_scanner_results(st.session_state["b3_scan_results"])
 
-# ==============================================================================
-# GRÁFICO INTERATIVO CANDLESTICK
-# ==============================================================================
-st.subheader("📈 Análise Gráfica Interativa")
-fig_candle = create_candlestick_chart(hist_data, ticker_normalized, current_price=metrics['current_price'])
-st.plotly_chart(fig_candle, use_container_width=True)
+    st.markdown("---")
 
-# ==============================================================================
-# SEÇÃO SANFONADA DE NOTÍCIAS (EXPANDER)
-# ==============================================================================
-render_news_expander(news_items, company_name)
+    # Inicializar armazenamento da análise na sessão
+    if "ai_analysis_data" not in st.session_state:
+        st.session_state["ai_analysis_data"] = {}
 
-# ==============================================================================
-# ASSISTENTE INTERATIVO DE CONSULTA COM IA (CONTEXTO DO ATIVO)
-# ==============================================================================
-render_asset_qa_section(
-    ticker=ticker_normalized,
-    company_name=company_name,
-    metrics=metrics,
-    news_items=news_items,
-    current_analysis=current_analysis,
-    api_key=active_api_key,
-    selected_model=selected_model
-)
+    analysis_key = f"{ticker_normalized}_{period_selected}_{selected_model}"
+    current_analysis = st.session_state["ai_analysis_data"].get(analysis_key)
+
+    # ==============================================================================
+    # SEÇÃO DO MOTOR DE IA (GOOGLE GEMINI - DISPARO POR BOTÃO)
+    # ==============================================================================
+    st.subheader("🤖 Diagnóstico de IA | Swing Trade & Momentum (Curto/Médio Prazo)")
+
+    if not active_api_key or active_api_key == "sua_chave_aqui":
+        st.info("💡 **Dica:** Para ativar a análise preditiva por Inteligência Artificial, informe sua **GEMINI_API_KEY** no arquivo `.env` ou insira-a no campo correspondente na barra lateral.")
+    else:
+        col_btn, col_msg = st.columns([1, 2])
+        with col_btn:
+            btn_disparar_ia = st.button("⚡ Gerar Diagnóstico com IA", type="primary", use_container_width=True)
+        with col_msg:
+            rpd = GEMINI_MODEL_RPD.get(selected_model, "?")
+            st.caption(f"Modelo: `{selected_model}` ({rpd} consultas/dia no nível gratuito). A IA só é consultada quando você clica no botão.")
+
+        if btn_disparar_ia:
+            titulos_noticias = format_news_for_prompt(news_items)
+            with st.spinner(f"Processando diagnóstico com {selected_model}..."):
+                try:
+                    ai_result = gerar_analise_cached(
+                        ticker=f"{ticker_normalized} ({company_name})",
+                        dados_mercado_str=metrics["summary_line"],
+                        titulos_noticias_str=titulos_noticias,
+                        api_key=active_api_key,
+                        modelo_preferencial=selected_model
+                    )
+                    st.session_state["ai_analysis_data"][analysis_key] = ai_result
+                    current_analysis = ai_result
+                except Exception as err:
+                    st.error(f"⚠️ Erro ao analisar: {err}")
+
+        # Exibe o diagnóstico gerado e mantido na sessão para o ativo atual
+        if current_analysis:
+            render_ai_card(current_analysis)
+            render_reasons_and_variables(
+                motivos=current_analysis.get("principais_motivos", []),
+                variaveis=current_analysis.get("variaveis_chave", []),
+                ai_result=current_analysis,
+                ticker=ticker_normalized
+            )
+        elif not btn_disparar_ia:
+            st.info(f"💡 Para gerar o diagnóstico inteligente de **{ticker_normalized}**, clique no botão **⚡ Gerar Diagnóstico com IA** acima.")
+
+    st.markdown("---")
+
+    # ==============================================================================
+    # GRÁFICO INTERATIVO CANDLESTICK
+    # ==============================================================================
+    st.subheader("📈 Análise Gráfica Interativa")
+    fig_candle = create_candlestick_chart(hist_data, ticker_normalized, current_price=metrics['current_price'])
+    st.plotly_chart(fig_candle, use_container_width=True)
+
+    # ==============================================================================
+    # SEÇÃO SANFONADA DE NOTÍCIAS (EXPANDER)
+    # ==============================================================================
+    render_news_expander(news_items, company_name)
+
+    # ==============================================================================
+    # ASSISTENTE INTERATIVO DE CONSULTA COM IA (CONTEXTO DO ATIVO)
+    # ==============================================================================
+    render_asset_qa_section(
+        ticker=ticker_normalized,
+        company_name=company_name,
+        metrics=metrics,
+        news_items=news_items,
+        current_analysis=current_analysis,
+        api_key=active_api_key,
+        selected_model=selected_model
+    )
+
+with tab_ganhos:
+    render_earnings_and_dividends_tab(
+        ticker=ticker_normalized,
+        company_name=company_name,
+        metrics=metrics,
+        ticker_info=ticker_info
+    )
+
+with tab_calculadora:
+    render_share_calculator_tab(
+        ticker=ticker_normalized,
+        company_name=company_name,
+        metrics=metrics,
+        ticker_info=ticker_info
+    )
 
 # Rodapé
 render_footer()
