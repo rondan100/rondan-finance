@@ -1361,6 +1361,205 @@ def render_earnings_and_dividends_tab(ticker: str, company_name: str, metrics: d
         else:
             st.info("Nenhum pagamento recente de dividendo/JCP registrado para este ticker.")
 
+    st.markdown("---")
+
+    # ==========================================================================
+    # 5. DIAGNÓSTICO AUTOMÁTICO DAS SITUAÇÕES ATUAIS DO ATIVO
+    # ==========================================================================
+    st.markdown(f"#### 🧭 Diagnóstico Explicado: O que os números de `{clean_ticker}` significam hoje?")
+
+    # Interpretação dinâmica de cada situação
+    if lpa_ttm is None:
+        sit_lpa_badge = "⚪ LPA Indisponível"
+        sit_lpa_cor = "#6b7280"
+        sit_lpa_desc = "O Yahoo Finance não reportou o Lucro por Ação (EPS) acumulado dos últimos 12 meses para este ticker."
+    elif lpa_ttm > 0:
+        ey_txt = f" ({earnings_yield_pct:.1f}% de Earnings Yield sobre a cotação atual)" if earnings_yield_pct is not None else ""
+        sit_lpa_badge = "🟢 Empresa Lucrativa"
+        sit_lpa_cor = "#10b981"
+        sit_lpa_desc = (
+            f"Cada ação gerou <b>R$ {lpa_ttm:.2f}</b> de lucro líquido nos últimos 12 meses{ey_txt}. "
+            "Significa que a operação é superavitária e gera valor real que pode ser distribuído em dividendos ou reinvestido."
+        )
+    else:
+        sit_lpa_badge = "🔴 Prejuízo Contábil (LPA Negativo)"
+        sit_lpa_cor = "#ef4444"
+        sit_lpa_desc = (
+            f"A empresa registrou prejuízo de <b>R$ {lpa_ttm:.2f} por ação</b> nos últimos 12 meses. "
+            "Nessa situação, o múltiplo P/L fica negativo/distorcido e eventuais dividendos pagos saem de reservas de caixa anteriores."
+        )
+
+    if dy_pct >= 6.0:
+        sit_dy_badge = "🟢 Pagadora Forte de Dividendos (≥ 6% a.a.)"
+        sit_dy_cor = "#10b981"
+        sit_dy_desc = (
+            f"Com Dividend Yield de <b>{dy_pct:.2f}%</b> (R$ {dpa_12m:.2f}/ação), o ativo supera o piso clássico de <b>6% ao ano</b> "
+            "de Décio Bazin e Luiz Barsi, sendo característico de empresas geradoras de renda passiva."
+        )
+    elif dy_pct >= 3.0:
+        sit_dy_badge = "🟡 Dividendos Moderados (3% a 6% a.a.)"
+        sit_dy_cor = "#f59e0b"
+        sit_dy_desc = (
+            f"O retorno em proventos é de <b>{dy_pct:.2f}%</b> (R$ {dpa_12m:.2f}/ação). "
+            "Remunera o acionista de forma equilibrada, geralmente combinando distribuição parcial com retenção para crescimento."
+        )
+    elif dy_pct > 0:
+        sit_dy_badge = "🔵 Dividendos Baixos / Foco em Crescimento (< 3% a.a.)"
+        sit_dy_cor = "#38bdf8"
+        sit_dy_desc = (
+            f"O Dividend Yield atual é de <b>{dy_pct:.2f}%</b> (R$ {dpa_12m:.2f}/ação). "
+            "Típico de empresas que priorizam reinvestir o caixa no próprio negócio (ou cujo preço da ação subiu rápido frente ao dividendo)."
+        )
+    else:
+        sit_dy_badge = "⚪ Sem Proventos nos Últimos 12 Meses"
+        sit_dy_cor = "#6b7280"
+        sit_dy_desc = "O ativo não distribuiu dividendos ou JCP nos últimos 12 meses (foco 100% em retenção/crescimento ou reestruturação financeira)."
+
+    if payout_pct is None:
+        sit_pay_badge = "⚪ Payout Não Calculável"
+        sit_pay_cor = "#6b7280"
+        sit_pay_desc = "Como o lucro por ação é negativo ou não há distribuição reportada, a razão DPA ÷ LPA não se aplica."
+    elif payout_pct > 100.0:
+        sit_pay_badge = "🟠 Payout Acima do Lucro (> 100%)"
+        sit_pay_cor = "#f59e0b"
+        sit_pay_desc = (
+            f"A empresa distribuiu <b>{payout_pct:.1f}%</b> do lucro líquido contábil. "
+            "Isso ocorre quando a companhia usa <b>reservas de lucros acumulados</b> de anos anteriores ou tem geração de caixa livre (FCO) superior ao lucro contábil. Exige acompanhar se é pontual ou recorrente."
+        )
+    elif payout_pct >= 50.0:
+        sit_pay_badge = "🟢 Perfil 'Vaca Leiteira' (Payout 50% a 100%)"
+        sit_pay_cor = "#10b981"
+        sit_pay_desc = (
+            f"Distribui a maior parte do lucro (<b>{payout_pct:.1f}%</b>) aos acionistas. "
+            "Perfil típico de empresas maduras (elétricas, bancos, saneamento, seguradoras) que já têm fluxo de caixa consolidado e pouca necessidade de grandes investimentos em expansão."
+        )
+    elif payout_pct >= 25.0:
+        sit_pay_badge = "🔵 Perfil Equilibrado (Payout 25% a 50%)"
+        sit_pay_cor = "#38bdf8"
+        sit_pay_desc = (
+            f"Distribui <b>{payout_pct:.1f}%</b> do lucro (acima do dividendo mínimo obrigatório de 25% da Lei das S.A.) "
+            f"e retém <b>{100.0 - payout_pct:.1f}%</b> para financiar novos projetos, modernização ou abatimento de dívida."
+        )
+    else:
+        sit_pay_badge = "🟣 Perfil Retenção / Crescimento (Payout < 25%)"
+        sit_pay_cor = "#a855f7"
+        sit_pay_desc = (
+            f"Distribui apenas <b>{payout_pct:.1f}%</b> do lucro e retém a quase totalidade no caixa. "
+            "O objetivo aqui é que o ganho do investidor venha da <b>valorização da cotação (ganho de capital)</b> impulsionada pelo crescimento futuro dos lucros."
+        )
+
+    if pl_ratio is not None and pl_ratio > 0:
+        if pl_ratio <= 8.0:
+            pl_comment = f"<b>P/L de {pl_ratio:.1f}x</b> (descontado/barato frente à média histórica da B3, ou mercado precificando queda nos lucros futuros)"
+        elif pl_ratio <= 15.0:
+            pl_comment = f"<b>P/L de {pl_ratio:.1f}x</b> (faixa intermediária/justa segundo o limite clássico de 15x de Benjamin Graham)"
+        else:
+            pl_comment = f"<b>P/L de {pl_ratio:.1f}x</b> (múltiplo esticado: o mercado paga caro hoje esperando forte crescimento dos lucros nos próximos anos)"
+    else:
+        pl_comment = "<b>P/L não aplicável</b> (lucro negativo ou indisponível)"
+
+    if pvp_ratio is not None and pvp_ratio > 0:
+        if pvp_ratio < 1.0:
+            pvp_comment = f"<b>P/VP de {pvp_ratio:.2f}x</b> (ação negociada <b>abaixo</b> do valor contábil do seu patrimônio líquido)"
+        elif pvp_ratio <= 2.0:
+            pvp_comment = f"<b>P/VP de {pvp_ratio:.2f}x</b> (negociada próxima ou com prêmio moderado sobre o patrimônio líquido)"
+        else:
+            pvp_comment = f"<b>P/VP de {pvp_ratio:.2f}x</b> (prêmio elevado sobre o patrimônio; comum em empresas leves em ativos físicos e com **ROE alto**)"
+    else:
+        pvp_comment = "<b>P/VP indisponível</b>"
+
+    sit_val_badge = "📐 Múltiplos P/L & P/VP"
+    sit_val_cor = "#60a5fa"
+    sit_val_desc = f"Na cotação de R$ {current_price:.2f}, o ativo apresenta {pl_comment} e {pvp_comment}."
+
+    diag_c1, diag_c2 = st.columns(2)
+    with diag_c1:
+        st.markdown(
+            f"""
+            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 4px solid {sit_lpa_cor}; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;">
+                <div style="font-weight: 700; color: {sit_lpa_cor}; font-size: 0.95rem; margin-bottom: 4px;">{sit_lpa_badge}</div>
+                <div style="font-size: 0.86rem; color: #d1d5db; line-height: 1.45;">{sit_lpa_desc}</div>
+            </div>
+            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 4px solid {sit_pay_cor}; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;">
+                <div style="font-weight: 700; color: {sit_pay_cor}; font-size: 0.95rem; margin-bottom: 4px;">{sit_pay_badge}</div>
+                <div style="font-size: 0.86rem; color: #d1d5db; line-height: 1.45;">{sit_pay_desc}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with diag_c2:
+        st.markdown(
+            f"""
+            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 4px solid {sit_dy_cor}; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;">
+                <div style="font-weight: 700; color: {sit_dy_cor}; font-size: 0.95rem; margin-bottom: 4px;">{sit_dy_badge}</div>
+                <div style="font-size: 0.86rem; color: #d1d5db; line-height: 1.45;">{sit_dy_desc}</div>
+            </div>
+            <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid #2d3748; border-left: 4px solid {sit_val_cor}; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;">
+                <div style="font-weight: 700; color: {sit_val_cor}; font-size: 0.95rem; margin-bottom: 4px;">{sit_val_badge}</div>
+                <div style="font-size: 0.86rem; color: #d1d5db; line-height: 1.45;">{sit_val_desc}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # ==========================================================================
+    # 6. GUIA DE LEITURA E GLOSSÁRIO COMPLETO DOS PARÂMETROS E SITUAÇÕES
+    # ==========================================================================
+    with st.expander("📖 Legenda Completa & Guia de Interpretação (O que significa cada parâmetro e situação)", expanded=True):
+        g_col1, g_col2 = st.columns(2)
+
+        with g_col1:
+            st.markdown("##### 💰 1. Indicadores de Ganhos e Proventos por Ação")
+            st.markdown(
+                "- **LPA (Lucro por Ação / EPS):** É o `Lucro Líquido Total ÷ Número Total de Ações`. Representa a fatia de lucro que pertence a cada 1 ação.\n"
+                "  - 🟢 **LPA Positivo e Crescente:** A empresa dá lucro e está expandindo resultados.\n"
+                "  - 🔴 **LPA Negativo:** A empresa operou no prejuízo nos últimos 12 meses.\n"
+                "- **Earnings Yield (`LPA ÷ Preço`):** É o inverso do P/L expresso em porcentagem. Mostra quanto a empresa gera de lucro anual em relação ao preço que você paga pela ação hoje (ex.: LPA de R$ 4,00 numa ação de R$ 40,00 = **10% ao ano** de geração de lucro).\n"
+                "- **DPA (Dividendo por Ação):** Soma em reais (`R$`) de todos os **Dividendos e JCP** efetivamente pagos para cada 1 ação nos últimos 12 meses.\n"
+                "- **Dividend Yield — DY (`DPA ÷ Preço Atual`):** Percentual de retorno anual apenas em proventos sobre a cotação atual.\n"
+                "  - 🟢 **Acima de 6% a.a.:** Considerado excelente para estratégias de renda passiva (critério Décio Bazin).\n"
+                "  - 🟡 **Entre 3% e 6% a.a.:** Retorno moderado; comum em empresas que dividem o lucro entre dividendos e expansão.\n"
+                "  - 🔵 **Abaixo de 3% a.a.:** Baixa distribuição; comum em empresas de crescimento (*growth*) ou quando a ação subiu muito rápido.\n"
+                "- **Data Ex (Ex-Dividendo):** Data de corte na B3. Quem dorme com a ação na véspera (*Data Com*) tem direito a receber o provento; a partir da *Data Ex*, quem compra a ação não recebe aquele pagamento específico."
+            )
+
+            st.markdown("##### 🍰 2. Faixas de Payout (`DPA ÷ LPA`) e Retenção")
+            st.markdown(
+                "- **Payout:** Mostra qual porcentagem do lucro líquido virou dividendo no bolso do acionista.\n"
+                "  - 🟣 **0% a 25% (Foco em Crescimento):** A empresa retém quase todo o lucro para abrir novas fábricas, lojas, tecnologia ou pagar dívidas.\n"
+                "  - 🔵 **25% a 50% (Equilíbrio):** Cumpre o dividendo mínimo obrigatório (normalmente 25% no Brasil) e reinveste a maior parte para continuar crescendo.\n"
+                "  - 🟢 **50% a 95% (Vaca Leiteira / Maturidade):** Empresa madura e grande geradora de caixa que não precisa reter muito capital e distribui a maior parte aos sócios.\n"
+                "  - 🟠 **Acima de 100% (Atenção):** A empresa pagou mais dividendos do que lucrou no ano. Pode ser positivo se vier de **reservas de lucros acumuladas** ou excesso de caixa, mas é um alerta se a empresa estiver se endividando para pagar dividendos.\n"
+                "- **Lucro Retido por Ação (`LPA - DPA`):** Dinheiro que ficou dentro da empresa por cada ação para gerar mais lucro nos próximos anos."
+            )
+
+        with g_col2:
+            st.markdown("##### 📐 3. Múltiplos de Valuation e Eficiência")
+            st.markdown(
+                "- **P/L (`Preço ÷ LPA`):** Quantos anos de lucro atual seriam necessários para 'pagar' o preço da ação.\n"
+                "  - 🟢 **P/L Baixo (ex.: 4x a 8x):** Ação potencialmente barata/descontada (ou mercado cético com o setor).\n"
+                "  - 🟡 **P/L Moderado (ex.: 9x a 15x):** Preço justo para empresas sólidas e estáveis.\n"
+                "  - 🟠 **P/L Alto (> 15x ou 20x):** O mercado está pagando um prêmio alto hoje porque espera que o lucro cresça muito no futuro.\n"
+                "- **VPA (Valor Patrimonial por Ação):** É o `Patrimônio Líquido Contábil ÷ Total de Ações` (tudo o que a empresa possui de bens/caixa menos todas as dívidas, dividido por ação).\n"
+                "- **P/VP (`Preço ÷ VPA`):** Compara a cotação na bolsa com o patrimônio contábil da empresa.\n"
+                "  - 🟢 **P/VP < 1,0x:** A ação custa na bolsa **menos** do que vale o patrimônio líquido contábil dela (desconto patrimonial).\n"
+                "  - 🔵 **P/VP entre 1,0x e 2,0x:** Faixa normal para empresas rentáveis.\n"
+                "  - 🟣 **P/VP > 2,0x:** Normal em empresas de tecnologia, marcas fortes ou alto ROE (que geram muito lucro precisando de pouco patrimônio físico).\n"
+                "- **ROE (`Lucro Líquido ÷ Patrimônio Líquido`):** Mede a eficiência da gestão. Um **ROE ≥ 15%** indica uma empresa altamente rentável que multiplica bem o dinheiro próprio."
+            )
+
+            st.markdown("##### 🎯 4. Referências de Preço-Teto e Preço Justo")
+            st.markdown(
+                "- **Preço-Teto de Décio Bazin (`DPA 12m ÷ Meta de DY`):**\n"
+                "  - Calcula o **preço máximo** que você pode pagar pela ação para garantir o Dividend Yield desejado (padrão de **6% a.a.**).\n"
+                "  - ✅ **Cotação Abaixo do Preço-Teto:** Significa que, mantendo os dividendos atuais, quem compra hoje recebe **mais** do que a meta escolhida no slider.\n"
+                "  - ⚠️ **Cotação Acima do Preço-Teto:** O dividendo atual remunera **menos** que a meta escolhida na cotação de hoje.\n"
+                "- **Valor Intrínseco de Benjamin Graham (`√[22,5 × LPA × VPA]`):**\n"
+                "  - Criado pelo mentor de Warren Buffett para encontrar o preço justo combinando **capacidade de lucro (LPA)** e **solidez patrimonial (VPA)** (baseado no teto de `P/L = 15` × `P/VP = 1,5` = `22,5`).\n"
+                "  - ✅ **Margem Positiva vs Cotação:** Ação negociada com desconto de segurança em relação aos seus fundamentos contábeis.\n"
+                "  - ⚠️ **Margem Negativa vs Cotação:** Ação negociada acima do limite conservador de Graham (comum em empresas de alto crescimento)."
+            )
+
 
 def render_footer():
     """
