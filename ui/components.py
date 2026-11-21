@@ -740,34 +740,51 @@ def render_share_calculator_tab(ticker: str, company_name: str, metrics: dict, t
             unsafe_allow_html=True
         )
 
+        val_input_key = f"calc_val_input_{ticker}"
+        pending_val_key = f"_pending_{val_input_key}"
+        if pending_val_key in st.session_state:
+            st.session_state[val_input_key] = float(st.session_state.pop(pending_val_key))
+        elif val_input_key not in st.session_state:
+            st.session_state[val_input_key] = 1000.0
+
+        def _set_aporte_val(novo_valor: float, k_widget: str = val_input_key, k_pending: str = pending_val_key):
+            st.session_state[k_pending] = float(novo_valor)
+            try:
+                st.session_state[k_widget] = float(novo_valor)
+            except Exception:
+                pass
+
         valor_aporte = st.number_input(
             "Valor disponível para investir (R$):",
             min_value=0.0,
-            value=1000.0,
             step=100.0,
             format="%.2f",
-            key=f"calc_val_input_{ticker}"
+            key=val_input_key
         )
 
-        # Botões rápidos de aporte
+        # Botões rápidos de aporte (suporta tanto on_click quanto clique direto via chave pendente)
         st.caption("⚡ Atalhos de aporte:")
         b1, b2, b3, b4 = st.columns(4)
         with b1:
-            if st.button("R$ 500", key=f"btn_v500_{ticker}", use_container_width=True):
-                st.session_state[f"calc_val_input_{ticker}"] = 500.0
-                st.rerun()
+            if st.button("R$ 500", key=f"btn_v500_{ticker}", use_container_width=True, on_click=_set_aporte_val, args=(500.0,)):
+                if valor_aporte != 500.0:
+                    st.session_state[pending_val_key] = 500.0
+                    st.rerun()
         with b2:
-            if st.button("R$ 1.000", key=f"btn_v1k_{ticker}", use_container_width=True):
-                st.session_state[f"calc_val_input_{ticker}"] = 1000.0
-                st.rerun()
+            if st.button("R$ 1.000", key=f"btn_v1k_{ticker}", use_container_width=True, on_click=_set_aporte_val, args=(1000.0,)):
+                if valor_aporte != 1000.0:
+                    st.session_state[pending_val_key] = 1000.0
+                    st.rerun()
         with b3:
-            if st.button("R$ 5.000", key=f"btn_v5k_{ticker}", use_container_width=True):
-                st.session_state[f"calc_val_input_{ticker}"] = 5000.0
-                st.rerun()
+            if st.button("R$ 5.000", key=f"btn_v5k_{ticker}", use_container_width=True, on_click=_set_aporte_val, args=(5000.0,)):
+                if valor_aporte != 5000.0:
+                    st.session_state[pending_val_key] = 5000.0
+                    st.rerun()
         with b4:
-            if st.button("R$ 10.000", key=f"btn_v10k_{ticker}", use_container_width=True):
-                st.session_state[f"calc_val_input_{ticker}"] = 10000.0
-                st.rerun()
+            if st.button("R$ 10.000", key=f"btn_v10k_{ticker}", use_container_width=True, on_click=_set_aporte_val, args=(10000.0,)):
+                if valor_aporte != 10000.0:
+                    st.session_state[pending_val_key] = 10000.0
+                    st.rerun()
 
         qtd_total_acoes = int(valor_aporte // custom_price) if custom_price > 0 else 0
         custo_efetivo = qtd_total_acoes * custom_price
@@ -834,34 +851,51 @@ def render_share_calculator_tab(ticker: str, company_name: str, metrics: dict, t
             unsafe_allow_html=True
         )
 
+        qty_input_key = f"calc_qty_input_{ticker}"
+        pending_qty_key = f"_pending_{qty_input_key}"
+        if pending_qty_key in st.session_state:
+            st.session_state[qty_input_key] = int(st.session_state.pop(pending_qty_key))
+        elif qty_input_key not in st.session_state:
+            st.session_state[qty_input_key] = 100
+
+        def _set_qtd_val(nova_qtd: int, k_widget: str = qty_input_key, k_pending: str = pending_qty_key):
+            st.session_state[k_pending] = int(nova_qtd)
+            try:
+                st.session_state[k_widget] = int(nova_qtd)
+            except Exception:
+                pass
+
         qtd_desejada = st.number_input(
             f"Quantidade desejada de ações ({clean_ticker}):",
             min_value=1,
-            value=100,
             step=10,
             format="%d",
-            key=f"calc_qty_input_{ticker}"
+            key=qty_input_key
         )
 
-        # Botões rápidos de quantidade
+        # Botões rápidos de quantidade (suporta tanto on_click quanto clique direto via chave pendente)
         st.caption("⚡ Atalhos de quantidade (Lotes):")
         q1, q2, q3, q4 = st.columns(4)
         with q1:
-            if st.button("100 (1 Lote)", key=f"btn_q100_{ticker}", use_container_width=True):
-                st.session_state[f"calc_qty_input_{ticker}"] = 100
-                st.rerun()
+            if st.button("100 (1 Lote)", key=f"btn_q100_{ticker}", use_container_width=True, on_click=_set_qtd_val, args=(100,)):
+                if qtd_desejada != 100:
+                    st.session_state[pending_qty_key] = 100
+                    st.rerun()
         with q2:
-            if st.button("500 (5 Lotes)", key=f"btn_q500_{ticker}", use_container_width=True):
-                st.session_state[f"calc_qty_input_{ticker}"] = 500
-                st.rerun()
+            if st.button("500 (5 Lotes)", key=f"btn_q500_{ticker}", use_container_width=True, on_click=_set_qtd_val, args=(500,)):
+                if qtd_desejada != 500:
+                    st.session_state[pending_qty_key] = 500
+                    st.rerun()
         with q3:
-            if st.button("1.000", key=f"btn_q1k_{ticker}", use_container_width=True):
-                st.session_state[f"calc_qty_input_{ticker}"] = 1000
-                st.rerun()
+            if st.button("1.000", key=f"btn_q1k_{ticker}", use_container_width=True, on_click=_set_qtd_val, args=(1000,)):
+                if qtd_desejada != 1000:
+                    st.session_state[pending_qty_key] = 1000
+                    st.rerun()
         with q4:
-            if st.button("5.000", key=f"btn_q5k_{ticker}", use_container_width=True):
-                st.session_state[f"calc_qty_input_{ticker}"] = 5000
-                st.rerun()
+            if st.button("5.000", key=f"btn_q5k_{ticker}", use_container_width=True, on_click=_set_qtd_val, args=(5000,)):
+                if qtd_desejada != 5000:
+                    st.session_state[pending_qty_key] = 5000
+                    st.rerun()
 
         valor_total_necessario = qtd_desejada * custom_price
         lotes_q = qtd_desejada // 100
